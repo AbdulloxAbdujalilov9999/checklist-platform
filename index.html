@@ -1114,8 +1114,12 @@
           placeholder="https://script.google.com/macros/s/.../exec"
         />
         <p class="hint">
-          Paste the URL of your own Google Apps Script web app to enable "Sync to Sheet". Nothing is
-          sent anywhere until you set this. Leave blank to keep everything on this device.
+          Paste the URL of your own deployed Google Apps Script web app (see the README for the script
+          to deploy) and everyone on your team who enters the same URL shares the same driver list.
+          Sync buttons push your current driver(s) to the sheet, then pull back anything your
+          teammates have synced — new drivers appear automatically, and item statuses catch up to the
+          shared sheet. Nothing is sent anywhere until you set this; leave blank to keep this device
+          fully local.
         </p>
         <div class="settings-row" style="margin-top:10px;">
           <button class="settings-btn primary" id="btnSaveScriptUrl">Save</button>
@@ -1429,10 +1433,10 @@
             <div class="badge-subtitle">Pending${issueCount > 0 ? ` · ${issueCount} issue${issueCount === 1 ? "" : "s"}` : ""}</div>
           </div>
           <div class="sync-bar">
-            <button class="btn-sync" id="btnSyncAll" type="button" title="Sync all drivers to Google Sheets">
+            <button class="btn-sync" id="btnSyncAll" type="button" title="Push every driver to Google Sheets, then pull in any drivers/updates your team has synced">
               📁 Sync All
             </button>
-            <button class="btn-sync primary" id="btnSyncCloud" type="button" title="Sync this driver to Google Sheets">
+            <button class="btn-sync primary" id="btnSyncCloud" type="button" title="Push this driver to Google Sheets, then pull in your team's latest changes">
               ☁️ Sync to Sheet
             </button>
           </div>
@@ -1836,6 +1840,101 @@
     });
   }
 
+  // Pulls the full current driver list back out of the shared Google Sheet
+  // and merges it into local state: drivers that exist in the sheet but not
+  // here are added, and items on drivers that exist in both places have
+  // their completed/issue/comment status updated to match the sheet. Local
+  // items and drivers with no counterpart in the sheet are left untouched —
+  // a pull never deletes anything, it only adds or catches up.
+  async function fetchSheetDrivers() {
+    const res = await fetch(settings.scriptUrl, { method: "GET" });
+    if (!res.ok) throw new Error("Sheet responded with " + res.status);
+    const data = await res.json();
+    if (!data || data.ok === false) throw new Error((data && data.error) || "Unknown error reading sheet");
+    return Array.isArray(data.drivers) ? data.drivers : [];
+  }
+
+  function mergeRemoteDrivers(remoteDrivers) {
+    let addedDrivers = 0;
+    let addedItems = 0;
+    let updatedItems = 0;
+
+    remoteDrivers.forEach((rd) => {
+      const name = (rd.driverName || "").trim();
+      if (!name) return;
+
+      const remoteItems = Array.isArray(rd.items) ? rd.items : [];
+      const existing = state.drivers.find((d) => d.name.trim().toLowerCase() === name.toLowerCase());
+
+      if (!existing) {
+        state.drivers.push({
+          id: "d_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
+          name,
+          truck: rd.truck || "",
+          trailer: rd.trailer || "",
+          items: remoteItems.map((it) => ({
+            id: "doc_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
+            text: it.text || "Untitled item",
+            completed: Boolean(it.completed),
+            hasIssue: Boolean(it.hasIssue),
+            comment: it.comment || "",
+            fileId: null,
+            fileName: null,
+          })),
+        });
+        addedDrivers++;
+        return;
+      }
+
+      remoteItems.forEach((rit) => {
+        const text = (rit.text || "").trim();
+        if (!text) return;
+        const localItem = existing.items.find((li) => li.text.trim().toLowerCase() === text.toLowerCase());
+        if (localItem) {
+          const changed =
+            localItem.completed !== Boolean(rit.completed) ||
+            localItem.hasIssue !== Boolean(rit.hasIssue) ||
+            (localItem.comment || "") !== (rit.comment || "");
+          localItem.completed = Boolean(rit.completed);
+          localItem.hasIssue = Boolean(rit.hasIssue);
+          localItem.comment = rit.comment || "";
+          if (changed) updatedItems++;
+        } else {
+          existing.items.push({
+            id: "doc_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
+            text,
+            completed: Boolean(rit.completed),
+            hasIssue: Boolean(rit.hasIssue),
+            comment: rit.comment || "",
+            fileId: null,
+            fileName: null,
+          });
+          addedItems++;
+        }
+      });
+    });
+
+    return { addedDrivers, addedItems, updatedItems };
+  }
+
+  async function pullFromSheet() {
+    const remoteDrivers = await fetchSheetDrivers();
+    const summary = mergeRemoteDrivers(remoteDrivers);
+    if (summary.addedDrivers || summary.addedItems || summary.updatedItems) {
+      dbSaveState();
+      render();
+    }
+    return summary;
+  }
+
+  function describeSyncSummary(summary) {
+    const parts = [];
+    if (summary.addedDrivers) parts.push(`${summary.addedDrivers} new driver${summary.addedDrivers === 1 ? "" : "s"}`);
+    if (summary.updatedItems) parts.push(`${summary.updatedItems} item${summary.updatedItems === 1 ? "" : "s"} updated`);
+    if (summary.addedItems) parts.push(`${summary.addedItems} item${summary.addedItems === 1 ? "" : "s"} added`);
+    return parts.length ? "Pulled from sheet: " + parts.join(", ") : "Already up to date with the sheet";
+  }
+
   async function syncSingleDriver() {
     if (!settings.scriptUrl) {
       showToast("Set a Google Sheets sync URL in Settings first");
@@ -1852,7 +1951,10 @@
 
     try {
       await sendViaForm(formatDriverPayload(driver));
+      syncBtn.innerHTML = "⏳ Pulling team changes...";
+      const summary = await pullFromSheet();
       syncBtn.innerHTML = `✅ Saved ${escapeHtml(driver.name)}!`;
+      showToast(describeSyncSummary(summary));
       setTimeout(() => {
         syncBtn.innerHTML = originalText;
         syncBtn.disabled = false;
@@ -1876,18 +1978,27 @@
     const originalText = allBtn.innerHTML;
     allBtn.disabled = true;
 
-    for (let i = 0; i < state.drivers.length; i++) {
-      const d = state.drivers[i];
-      allBtn.innerHTML = `⏳ Syncing ${i + 1}/${state.drivers.length}...`;
-      await sendViaForm(formatDriverPayload(d));
-      await new Promise((r) => setTimeout(r, 700));
-    }
+    try {
+      for (let i = 0; i < state.drivers.length; i++) {
+        const d = state.drivers[i];
+        allBtn.innerHTML = `⏳ Syncing ${i + 1}/${state.drivers.length}...`;
+        await sendViaForm(formatDriverPayload(d));
+        await new Promise((r) => setTimeout(r, 700));
+      }
 
-    allBtn.innerHTML = "✅ All drivers synced!";
-    setTimeout(() => {
-      allBtn.innerHTML = originalText;
-      allBtn.disabled = false;
-    }, 2500);
+      allBtn.innerHTML = "⏳ Pulling team changes...";
+      const summary = await pullFromSheet();
+
+      allBtn.innerHTML = "✅ All drivers synced!";
+      showToast(describeSyncSummary(summary));
+    } catch (err) {
+      showToast("Sync failed: " + err.message);
+    } finally {
+      setTimeout(() => {
+        allBtn.innerHTML = originalText;
+        allBtn.disabled = false;
+      }, 2500);
+    }
   }
 
   // ---------------------------------------------------------------------

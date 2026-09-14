@@ -1,0 +1,2186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#000000" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='6' fill='%230a84ff'/%3E%3Cpath d='M7 12.5l3 3 7-7' stroke='white' stroke-width='2.2' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E" />
+  <title>Driver Fleet & Safety Compliance Portal</title>
+  <style>
+    :root {
+      --bg: #000000;
+      --sidebar-bg: #141416;
+      --card-bg: #1c1c1e;
+      --card-inner: #2c2c2e;
+      --text: #ffffff;
+      --text-muted: #8e8e93;
+      --accent: #0a84ff;
+      --accent-hover: #0071e3;
+      --warning: #ff9f0a;
+      --warning-bg: rgba(255, 159, 10, 0.12);
+      --success: #30d158;
+      --danger: #ff453a;
+      --border: #2c2c2e;
+      --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      --topbar-h: 56px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: var(--font);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    html, body {
+      height: 100%;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    button, input, textarea {
+      font-size: 16px; /* prevents iOS auto-zoom on focus */
+    }
+
+    /* Mobile top bar */
+    .mobile-topbar {
+      display: none;
+      align-items: center;
+      gap: 10px;
+      height: var(--topbar-h);
+      padding: 0 12px;
+      border-bottom: 1px solid var(--border);
+      background: var(--sidebar-bg);
+      flex-shrink: 0;
+      z-index: 40;
+    }
+
+    .icon-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 38px;
+      height: 38px;
+      border-radius: 9px;
+      border: none;
+      background: transparent;
+      color: var(--text);
+      cursor: pointer;
+    }
+
+    .icon-btn:hover {
+      background: #232326;
+    }
+
+    .mobile-topbar h1 {
+      font-size: 16px;
+      font-weight: 700;
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .app-layout {
+      display: flex;
+      width: 100%;
+      flex: 1;
+      min-height: 0;
+      position: relative;
+    }
+
+    /* Sidebar */
+    .sidebar-backdrop {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.55);
+      z-index: 45;
+    }
+
+    .sidebar {
+      width: 320px;
+      background: var(--sidebar-bg);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+    }
+
+    .sidebar-header {
+      padding: 20px 16px 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .sidebar-header h2 {
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: -0.4px;
+    }
+
+    .sidebar-search {
+      padding: 0 16px 10px;
+    }
+
+    .sidebar-search input {
+      width: 100%;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 12px;
+      color: var(--text);
+      font-size: 14px;
+      outline: none;
+    }
+
+    .sidebar-search input:focus {
+      border-color: var(--accent);
+    }
+
+    .add-driver-form {
+      padding: 0 16px 14px;
+      display: flex;
+      gap: 8px;
+    }
+
+    .sidebar-input {
+      flex: 1;
+      min-width: 0;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 9px 12px;
+      color: var(--text);
+      font-size: 14px;
+      outline: none;
+    }
+
+    .sidebar-input:focus {
+      border-color: var(--accent);
+    }
+
+    .add-driver-btn {
+      background: var(--accent);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 0 14px;
+      font-weight: 600;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+
+    .driver-list {
+      flex: 1;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      list-style: none;
+      padding: 0 8px 16px;
+    }
+
+    .driver-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      margin-bottom: 4px;
+      transition: background 0.15s;
+      gap: 8px;
+    }
+
+    .driver-item:hover {
+      background: #202024;
+    }
+
+    .driver-item.active {
+      background: #28282e;
+    }
+
+    .driver-info {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      min-width: 0;
+    }
+
+    .driver-name {
+      font-size: 15px;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .driver-meta {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 2px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .driver-item-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+
+    .driver-badge {
+      background: #2a2a2e;
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 10px;
+    }
+
+    .driver-badge.has-issue {
+      background: rgba(255, 159, 10, 0.18);
+      color: var(--warning);
+    }
+
+    .driver-del-btn {
+      background: transparent;
+      border: none;
+      color: var(--danger);
+      font-size: 18px;
+      cursor: pointer;
+      padding: 4px 6px;
+      border-radius: 6px;
+      opacity: 0.7;
+    }
+
+    .driver-del-btn:hover {
+      opacity: 1;
+      background: rgba(255, 69, 58, 0.12);
+    }
+
+    .empty-sidebar {
+      padding: 24px 16px;
+      color: var(--text-muted);
+      font-size: 13px;
+      text-align: center;
+    }
+
+    .sidebar-footer {
+      padding: 10px 16px 16px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      gap: 8px;
+    }
+
+    .sidebar-footer-btn {
+      flex: 1;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-size: 12.5px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    .sidebar-footer-btn:hover {
+      color: var(--text);
+      border-color: #3e3e42;
+    }
+
+    /* Main Area */
+    .main-content {
+      flex: 1;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      display: flex;
+      justify-content: center;
+      padding: 36px 24px 100px;
+      min-width: 0;
+    }
+
+    .content-wrapper {
+      width: 100%;
+      max-width: 780px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+      min-width: 0;
+    }
+
+    header {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 14px;
+    }
+
+    .title-area {
+      min-width: 0;
+    }
+
+    .title-area h1 {
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--accent);
+      outline: none;
+      overflow-wrap: break-word;
+    }
+
+    .title-area p {
+      color: var(--text-muted);
+      font-size: 13.5px;
+      margin-top: 3px;
+    }
+
+    .header-actions {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 8px;
+    }
+
+    .badge-counter {
+      font-size: 30px;
+      font-weight: 700;
+      color: var(--accent);
+      text-align: right;
+      line-height: 1;
+    }
+
+    .badge-subtitle {
+      font-size: 12px;
+      color: var(--text-muted);
+      text-align: right;
+    }
+
+    .sync-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+
+    .btn-sync {
+      background: #242426;
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 9px 14px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+    }
+
+    .btn-sync:hover {
+      background: #2c2c30;
+      border-color: #3e3e42;
+    }
+
+    .btn-sync:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .btn-sync.primary {
+      background: #107c41;
+      border-color: #107c41;
+      color: #fff;
+    }
+
+    .btn-sync.primary:hover {
+      background: #0d6535;
+    }
+
+    .driver-unit-inputs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .unit-input {
+      flex: 1;
+      min-width: 140px;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 14px;
+      color: var(--text);
+      font-size: 14px;
+      outline: none;
+    }
+
+    .unit-input:focus {
+      border-color: var(--accent);
+    }
+
+    .add-form {
+      display: flex;
+      align-items: center;
+      padding: 12px 16px;
+      background: var(--card-bg);
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      gap: 8px;
+    }
+
+    .add-icon {
+      font-size: 20px;
+      color: var(--accent);
+      flex-shrink: 0;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .add-input {
+      flex: 1;
+      min-width: 0;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: var(--text);
+      font-size: 15px;
+    }
+
+    .card {
+      background: var(--card-bg);
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      overflow: visible;
+    }
+
+    .checklist {
+      list-style: none;
+    }
+
+    .divider-row {
+      padding: 12px 16px 6px;
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      color: var(--text-muted);
+      background: rgba(255, 255, 255, 0.02);
+      border-top: 1px solid var(--border);
+      border-bottom: 0.5px solid var(--border);
+    }
+
+    .checklist-item {
+      display: flex;
+      flex-direction: column;
+      border-bottom: 0.5px solid var(--border);
+      transition: background 0.15s ease;
+    }
+
+    .checklist-item:last-child {
+      border-bottom: none;
+    }
+
+    .checklist-item.has-issue {
+      background: var(--warning-bg);
+    }
+
+    .checklist-row-main {
+      display: flex;
+      flex-wrap: nowrap;
+      align-items: center;
+      padding: 11px 14px;
+      width: 100%;
+      gap: 8px;
+    }
+
+    .checklist-item:hover .checklist-row-main {
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .btn-group-toggle {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+
+    .checkbox-btn {
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      border: 2px solid #545458;
+      background: transparent;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s cubic-bezier(0.1, 0.9, 0.2, 1);
+      flex-shrink: 0;
+    }
+
+    .checkbox-btn:hover {
+      border-color: var(--accent);
+    }
+
+    .checklist-item.completed .checkbox-btn {
+      background: var(--accent);
+      border-color: var(--accent);
+    }
+
+    .checkbox-btn svg {
+      opacity: 0;
+      width: 14px;
+      height: 14px;
+      fill: none;
+      stroke: #ffffff;
+      stroke-width: 3;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .checklist-item.completed .checkbox-btn svg {
+      opacity: 1;
+    }
+
+    .issue-btn {
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      border: 1.5px solid #545458;
+      background: transparent;
+      color: #8e8e93;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      font-weight: 800;
+      transition: all 0.15s ease;
+      flex-shrink: 0;
+    }
+
+    .issue-btn:hover {
+      border-color: var(--warning);
+      color: var(--warning);
+    }
+
+    .checklist-item.has-issue .issue-btn {
+      background: var(--warning);
+      border-color: var(--warning);
+      color: #000;
+    }
+
+    .item-content {
+      flex: 1 1 auto;
+      min-width: 0;
+      font-size: 15px;
+      outline: none;
+      line-height: 1.4;
+      overflow-wrap: break-word;
+      text-decoration: none !important;
+    }
+
+    .checklist-item.completed .item-content {
+      color: #b0b0b8;
+      text-decoration: none !important;
+    }
+
+    .comment-drawer {
+      padding: 0 14px 12px 48px;
+      display: none;
+    }
+
+    .checklist-item.has-issue .comment-drawer {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .comment-input {
+      width: 100%;
+      background: rgba(0, 0, 0, 0.35);
+      border: 1px solid rgba(255, 159, 10, 0.35);
+      border-radius: 6px;
+      padding: 8px 10px;
+      color: #ffd60a;
+      font-size: 13px;
+      outline: none;
+      resize: vertical;
+      min-height: 48px;
+    }
+
+    .comment-input::placeholder {
+      color: rgba(255, 214, 10, 0.5);
+    }
+
+    .comment-input:focus {
+      border-color: var(--warning);
+    }
+
+    .file-actions {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      flex-shrink: 0;
+    }
+
+    .doc-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      background: rgba(10, 132, 255, 0.15);
+      color: var(--accent);
+      padding: 6px 8px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+
+    .doc-badge:hover {
+      background: rgba(10, 132, 255, 0.28);
+    }
+
+    .doc-badge span.label {
+      display: none;
+    }
+
+    @media (min-width: 480px) {
+      .doc-badge span.label {
+        display: inline;
+      }
+    }
+
+    .upload-btn-label {
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 34px;
+      height: 34px;
+      color: var(--text-muted);
+      border-radius: 6px;
+      transition: color 0.15s;
+      flex-shrink: 0;
+    }
+
+    .upload-btn-label:hover {
+      color: var(--accent);
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .hidden-file-input {
+      display: none;
+    }
+
+    .remove-doc-btn {
+      background: none;
+      border: none;
+      color: var(--danger);
+      font-size: 16px;
+      cursor: pointer;
+      padding: 6px;
+      opacity: 0.7;
+      flex-shrink: 0;
+    }
+
+    .remove-doc-btn:hover {
+      opacity: 1;
+    }
+
+    .delete-btn {
+      background: none;
+      border: none;
+      color: var(--danger);
+      cursor: pointer;
+      padding: 6px;
+      font-size: 17px;
+      flex-shrink: 0;
+      opacity: 0.55;
+      border-radius: 6px;
+    }
+
+    .delete-btn:hover {
+      opacity: 1;
+      background: rgba(255, 69, 58, 0.12);
+    }
+
+    .footer-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0 4px;
+    }
+
+    .footer-btn {
+      background: transparent;
+      border: none;
+      color: var(--accent);
+      font-size: 13px;
+      cursor: pointer;
+      font-weight: 500;
+      padding: 6px 8px;
+      border-radius: 6px;
+    }
+
+    .footer-btn:hover {
+      background: rgba(10, 132, 255, 0.1);
+    }
+
+    .footer-btn.danger {
+      color: var(--danger);
+    }
+
+    .empty-main {
+      padding: 60px 20px;
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 14px;
+    }
+
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(0, 0, 0, 0.85);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      padding: 24px;
+    }
+
+    .modal-box {
+      background: var(--card-bg);
+      border-radius: 14px;
+      width: 100%;
+      max-width: 900px;
+      height: 85vh;
+      display: flex;
+      flex-direction: column;
+      border: 1px solid var(--border);
+      overflow: hidden;
+    }
+
+    .modal-box.modal-narrow {
+      max-width: 460px;
+      height: auto;
+      max-height: 85vh;
+    }
+
+    .modal-header {
+      padding: 12px 18px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .modal-header h3 {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .modal-close {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      font-size: 22px;
+      cursor: pointer;
+      padding: 4px 8px;
+    }
+
+    .modal-close:hover {
+      color: var(--text);
+    }
+
+    .modal-body {
+      flex: 1;
+      overflow: auto;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #111113;
+    }
+
+    .modal-body iframe, .modal-body img {
+      width: 100%;
+      height: 100%;
+      border: none;
+      object-fit: contain;
+    }
+
+    .settings-body {
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      overflow-y: auto;
+    }
+
+    .settings-section h4 {
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+
+    .settings-section p.hint {
+      font-size: 12.5px;
+      color: var(--text-muted);
+      margin-top: 6px;
+      line-height: 1.5;
+    }
+
+    .settings-input {
+      width: 100%;
+      background: var(--card-inner);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      color: var(--text);
+      font-size: 14px;
+      outline: none;
+    }
+
+    .settings-input:focus {
+      border-color: var(--accent);
+    }
+
+    .settings-row {
+      display: flex;
+      gap: 8px;
+    }
+
+    .settings-btn {
+      background: var(--card-inner);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 9px 14px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      flex: 1;
+    }
+
+    .settings-btn:hover {
+      background: #34343a;
+    }
+
+    .settings-btn.primary {
+      background: var(--accent);
+      border-color: var(--accent);
+    }
+
+    .settings-btn.primary:hover {
+      background: var(--accent-hover);
+    }
+
+    .settings-btn.danger {
+      color: var(--danger);
+    }
+
+    .toast {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%) translateY(8px);
+      background: #2c2c2e;
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 10px 16px;
+      border-radius: 10px;
+      font-size: 13.5px;
+      z-index: 1200;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s ease, transform 0.2s ease;
+      max-width: 90vw;
+      text-align: center;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+    }
+
+    .toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+      pointer-events: auto;
+    }
+
+    .visually-hidden-input {
+      display: none;
+    }
+
+    @media (max-width: 860px) {
+      .mobile-topbar {
+        display: flex;
+      }
+
+      body {
+        height: 100vh;
+      }
+
+      .app-layout {
+        overflow: hidden;
+      }
+
+      .sidebar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        z-index: 50;
+        transform: translateX(-100%);
+        transition: transform 0.2s ease;
+        width: min(320px, 86vw);
+      }
+
+      .sidebar.open {
+        transform: translateX(0);
+      }
+
+      .sidebar-backdrop.open {
+        display: block;
+      }
+
+      .main-content {
+        padding: 20px 14px 90px;
+      }
+
+      .title-area h1 {
+        font-size: 23px;
+      }
+
+      .header-actions {
+        width: 100%;
+        align-items: stretch;
+      }
+
+      .badge-counter, .badge-subtitle {
+        text-align: left;
+      }
+
+      header {
+        flex-direction: column;
+      }
+
+      .sync-bar {
+        justify-content: flex-start;
+      }
+
+      .btn-sync {
+        flex: 1;
+        justify-content: center;
+      }
+
+      .modal-box {
+        height: 100vh;
+        max-width: 100vw;
+        border-radius: 0;
+      }
+
+      .modal-overlay {
+        padding: 0;
+      }
+
+      .modal-box.modal-narrow {
+        height: auto;
+        max-height: 92vh;
+        border-radius: 14px;
+        margin: 16px;
+        width: calc(100vw - 32px);
+      }
+
+      .modal-overlay:has(.modal-narrow) {
+        padding: 0;
+      }
+    }
+  </style>
+</head>
+<body>
+
+<div class="mobile-topbar">
+  <button class="icon-btn" id="btnOpenSidebar" aria-label="Open driver list">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+  </button>
+  <h1 id="mobileTitle">Compliance Portal</h1>
+  <button class="icon-btn" id="btnOpenSettingsMobile" aria-label="Settings">
+    <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+  </button>
+</div>
+
+<div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+
+<div class="app-layout">
+  <!-- Drivers List Sidebar -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <h2>Drivers</h2>
+      <button class="icon-btn" id="btnOpenSettingsDesktop" aria-label="Settings" title="Settings, backup & sync">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+      </button>
+    </div>
+
+    <div class="sidebar-search">
+      <input type="search" id="driverSearchInput" placeholder="Search drivers..." autocomplete="off" />
+    </div>
+
+    <form class="add-driver-form" id="addDriverForm">
+      <input
+        type="text"
+        id="driverNameInput"
+        class="sidebar-input"
+        placeholder="+ Add driver (e.g. Alejandro)"
+        autocomplete="off"
+        required
+      />
+      <button type="submit" class="add-driver-btn">Add</button>
+    </form>
+
+    <ul class="driver-list" id="driverList"></ul>
+
+    <div class="sidebar-footer">
+      <button class="sidebar-footer-btn" id="btnExport" title="Download a backup of all drivers & documents">
+        ⬇︎ Export backup
+      </button>
+      <button class="sidebar-footer-btn" id="btnImport" title="Restore from a backup file">
+        ⬆︎ Import backup
+      </button>
+      <input type="file" id="importFileInput" accept="application/json" class="visually-hidden-input" />
+    </div>
+  </aside>
+
+  <!-- Driver Checklist Dashboard -->
+  <main class="main-content">
+    <div class="content-wrapper" id="mainContentWrapper">
+      <!-- Populated by renderMain(); empty state shown when no drivers exist -->
+    </div>
+  </main>
+</div>
+
+<!-- Built-in Document Preview Modal -->
+<div class="modal-overlay" id="docModal">
+  <div class="modal-box" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <h3 id="modalDocTitle">Document Preview</h3>
+      <button class="modal-close" id="btnCloseDocModal" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body" id="modalBody"></div>
+  </div>
+</div>
+
+<!-- Settings / Backup / Sync Modal -->
+<div class="modal-overlay" id="settingsModal">
+  <div class="modal-box modal-narrow" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <h3>Settings</h3>
+      <button class="modal-close" id="btnCloseSettingsModal" aria-label="Close">&times;</button>
+    </div>
+    <div class="settings-body">
+      <div class="settings-section">
+        <h4>Google Sheets sync</h4>
+        <input
+          type="url"
+          id="scriptUrlInput"
+          class="settings-input"
+          placeholder="https://script.google.com/macros/s/.../exec"
+        />
+        <p class="hint">
+          Paste the URL of your own Google Apps Script web app to enable "Sync to Sheet". Nothing is
+          sent anywhere until you set this. Leave blank to keep everything on this device.
+        </p>
+        <div class="settings-row" style="margin-top:10px;">
+          <button class="settings-btn primary" id="btnSaveScriptUrl">Save</button>
+          <button class="settings-btn danger" id="btnClearScriptUrl">Clear</button>
+        </div>
+      </div>
+      <div class="settings-section">
+        <h4>Backup & restore</h4>
+        <p class="hint">All data lives only in this browser. Export a backup regularly, especially before clearing browser data.</p>
+        <div class="settings-row" style="margin-top:10px;">
+          <button class="settings-btn" id="btnExportInSettings">Export backup (.json)</button>
+          <button class="settings-btn" id="btnImportInSettings">Import backup</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- Invisible transport form for Google Sheets sync -->
+<iframe name="sync_target_frame" id="sync_target_frame" style="display:none;"></iframe>
+<form id="hiddenSyncForm" method="POST" target="sync_target_frame" style="display:none;">
+  <input type="hidden" name="payload" id="hiddenPayloadInput" />
+</form>
+
+<script>
+(function () {
+  "use strict";
+
+  const DEFAULT_DOCUMENTS = [
+    // Vehicle & Binder
+    "Registration",
+    "Insurance",
+    "Cab Card / IRP",
+    "IFTA License",
+    "Annual DOT Inspection",
+    "Trailer Registration",
+    "Trailer Annual Inspection",
+    "Lease Agreement",
+    "Emergency Contacts",
+    "Accident Packet",
+    "Driver Vehicle Inspection Reports (DVIR)",
+    "Permits (if applicable)",
+    "Hazmat Documents (if applicable)",
+    // Driver Safety & Qualifications
+    "MVR Check",
+    "DOT Physical",
+    "ELD Active",
+  ];
+
+  const MAX_FILE_BYTES = 20 * 1024 * 1024; // 20MB per document
+  const DB_NAME = "ChecklistPlatformDB";
+  const DB_VERSION = 1;
+  const STORE_STATE = "app_state";
+  const STORE_FILES = "doc_files";
+  const STORE_SETTINGS = "settings";
+  let db = null;
+
+  let state = {
+    selectedDriverId: null,
+    drivers: [],
+  };
+  let settings = { scriptUrl: "" };
+  let driverSearch = "";
+
+  // ---------------------------------------------------------------------
+  // IndexedDB helpers
+  // ---------------------------------------------------------------------
+
+  function openDatabase() {
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.open(DB_NAME, DB_VERSION);
+      request.onupgradeneeded = (e) => {
+        const d = e.target.result;
+        if (!d.objectStoreNames.contains(STORE_STATE)) {
+          d.createObjectStore(STORE_STATE, { keyPath: "id" });
+        }
+        if (!d.objectStoreNames.contains(STORE_FILES)) {
+          d.createObjectStore(STORE_FILES, { keyPath: "fileId" });
+        }
+        if (!d.objectStoreNames.contains(STORE_SETTINGS)) {
+          d.createObjectStore(STORE_SETTINGS, { keyPath: "id" });
+        }
+      };
+      request.onsuccess = (e) => {
+        db = e.target.result;
+        resolve(db);
+      };
+      request.onerror = (e) => reject(e);
+    });
+  }
+
+  function dbSaveState() {
+    if (!db) return;
+    const tx = db.transaction([STORE_STATE], "readwrite");
+    tx.objectStore(STORE_STATE).put({ id: "current_state", data: state });
+  }
+
+  function dbLoadState() {
+    return new Promise((resolve) => {
+      if (!db) return resolve(null);
+      const tx = db.transaction([STORE_STATE], "readonly");
+      const req = tx.objectStore(STORE_STATE).get("current_state");
+      req.onsuccess = () => resolve(req.result ? req.result.data : null);
+      req.onerror = () => resolve(null);
+    });
+  }
+
+  function dbSaveSettings() {
+    if (!db) return;
+    const tx = db.transaction([STORE_SETTINGS], "readwrite");
+    tx.objectStore(STORE_SETTINGS).put({ id: "current_settings", data: settings });
+  }
+
+  function dbLoadSettings() {
+    return new Promise((resolve) => {
+      if (!db) return resolve(null);
+      const tx = db.transaction([STORE_SETTINGS], "readonly");
+      const req = tx.objectStore(STORE_SETTINGS).get("current_settings");
+      req.onsuccess = () => resolve(req.result ? req.result.data : null);
+      req.onerror = () => resolve(null);
+    });
+  }
+
+  function dbSaveFile(fileId, fileObj) {
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction([STORE_FILES], "readwrite");
+      tx.objectStore(STORE_FILES).put({ fileId, ...fileObj });
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  }
+
+  function dbGetFile(fileId) {
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction([STORE_FILES], "readonly");
+      const req = tx.objectStore(STORE_FILES).get(fileId);
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  }
+
+  function dbDeleteFile(fileId) {
+    if (!fileId || !db) return;
+    const tx = db.transaction([STORE_FILES], "readwrite");
+    tx.objectStore(STORE_FILES).delete(fileId);
+  }
+
+  function dbClearAll() {
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction([STORE_STATE, STORE_FILES], "readwrite");
+      tx.objectStore(STORE_STATE).clear();
+      tx.objectStore(STORE_FILES).clear();
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  }
+
+  // ---------------------------------------------------------------------
+  // Toasts
+  // ---------------------------------------------------------------------
+
+  let toastTimer = null;
+  function showToast(message) {
+    const el = document.getElementById("toast");
+    el.textContent = message;
+    el.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.remove("show"), 2600);
+  }
+
+  // ---------------------------------------------------------------------
+  // Data helpers
+  // ---------------------------------------------------------------------
+
+  function buildDefaultItems() {
+    return DEFAULT_DOCUMENTS.map((title, idx) => ({
+      id: "doc_" + Date.now() + "_" + idx + "_" + Math.random().toString(36).slice(2, 6),
+      text: title,
+      completed: false,
+      hasIssue: false,
+      comment: "",
+      fileId: null,
+      fileName: null,
+    }));
+  }
+
+  function currentDriver() {
+    return state.drivers.find((d) => d.id === state.selectedDriverId);
+  }
+
+  async function init() {
+    await openDatabase();
+    const [loadedState, loadedSettings] = await Promise.all([dbLoadState(), dbLoadSettings()]);
+
+    if (loadedSettings) settings = loadedSettings;
+
+    if (loadedState && loadedState.drivers && loadedState.drivers.length > 0) {
+      state = loadedState;
+      if (!state.selectedDriverId || !state.drivers.find((d) => d.id === state.selectedDriverId)) {
+        state.selectedDriverId = state.drivers[0].id;
+      }
+    } else {
+      const defaultDriver = {
+        id: "d_" + Date.now(),
+        name: "Alejandro",
+        truck: "TR-102",
+        trailer: "53-V-11",
+        items: buildDefaultItems(),
+      };
+      state = {
+        selectedDriverId: defaultDriver.id,
+        drivers: [defaultDriver],
+      };
+      dbSaveState();
+    }
+
+    document.getElementById("scriptUrlInput").value = settings.scriptUrl || "";
+    bindStaticEvents();
+    render();
+  }
+
+  // ---------------------------------------------------------------------
+  // Rendering
+  // ---------------------------------------------------------------------
+
+  function render() {
+    renderSidebar();
+    renderMain();
+  }
+
+  function filteredDrivers() {
+    const q = driverSearch.trim().toLowerCase();
+    if (!q) return state.drivers;
+    return state.drivers.filter((d) => d.name.toLowerCase().includes(q));
+  }
+
+  function renderSidebar() {
+    const listEl = document.getElementById("driverList");
+    listEl.innerHTML = "";
+
+    const drivers = filteredDrivers();
+
+    if (state.drivers.length === 0) {
+      listEl.innerHTML = '<li class="empty-sidebar">No drivers yet. Add one above to get started.</li>';
+      return;
+    }
+
+    if (drivers.length === 0) {
+      listEl.innerHTML = '<li class="empty-sidebar">No drivers match "' + escapeHtml(driverSearch) + '".</li>';
+      return;
+    }
+
+    drivers.forEach((d) => {
+      const li = document.createElement("li");
+      li.className = `driver-item ${d.id === state.selectedDriverId ? "active" : ""}`;
+      li.addEventListener("click", () => selectDriver(d.id));
+
+      const remaining = d.items.filter((i) => !i.completed).length;
+      const hasIssues = d.items.some((i) => i.hasIssue);
+      const truckLabel = [d.truck ? `Trk: ${d.truck}` : "", d.trailer ? `Trl: ${d.trailer}` : ""]
+        .filter(Boolean)
+        .join(" • ");
+
+      li.innerHTML = `
+        <div class="driver-info">
+          <span class="driver-name">${escapeHtml(d.name)}</span>
+          <span class="driver-meta">${truckLabel || "No unit specified"}</span>
+        </div>
+        <div class="driver-item-actions">
+          <span class="driver-badge${hasIssues ? " has-issue" : ""}">${remaining}</span>
+          <button class="driver-del-btn" type="button" aria-label="Delete driver" title="Delete driver">&times;</button>
+        </div>
+      `;
+      li.querySelector(".driver-del-btn").addEventListener("click", (e) => deleteDriver(e, d.id));
+      listEl.appendChild(li);
+    });
+  }
+
+  function renderMain() {
+    const wrapper = document.getElementById("mainContentWrapper");
+    const driver = currentDriver();
+
+    if (!driver) {
+      wrapper.innerHTML = `
+        <div class="empty-main">
+          <p>No driver selected yet.</p>
+          <p style="margin-top:6px;">Add a driver from the sidebar to start their compliance checklist.</p>
+        </div>
+      `;
+      document.getElementById("mobileTitle").textContent = "Compliance Portal";
+      return;
+    }
+
+    document.getElementById("mobileTitle").textContent = driver.name;
+
+    const pending = driver.items.filter((i) => !i.completed);
+    const completed = driver.items.filter((i) => i.completed);
+    const issueCount = driver.items.filter((i) => i.hasIssue).length;
+
+    wrapper.innerHTML = `
+      <header>
+        <div class="title-area">
+          <h1 id="driverTitle" contenteditable="true" spellcheck="false">${escapeHtml(driver.name)}</h1>
+          <p>Compliance, Vehicle Binder & Safety Qualifications</p>
+        </div>
+        <div class="header-actions">
+          <div>
+            <div class="badge-counter">${pending.length}</div>
+            <div class="badge-subtitle">Pending${issueCount > 0 ? ` · ${issueCount} issue${issueCount === 1 ? "" : "s"}` : ""}</div>
+          </div>
+          <div class="sync-bar">
+            <button class="btn-sync" id="btnSyncAll" type="button" title="Sync all drivers to Google Sheets">
+              📁 Sync All
+            </button>
+            <button class="btn-sync primary" id="btnSyncCloud" type="button" title="Sync this driver to Google Sheets">
+              ☁️ Sync to Sheet
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <div class="driver-unit-inputs">
+        <input type="text" id="truckUnitInput" class="unit-input" placeholder="Truck # (e.g. TR-104)" value="${escapeHtmlAttr(driver.truck || "")}" />
+        <input type="text" id="trailerUnitInput" class="unit-input" placeholder="Trailer # (e.g. 53-V-201)" value="${escapeHtmlAttr(driver.trailer || "")}" />
+      </div>
+
+      <form class="add-form" id="addItemForm">
+        <span class="add-icon" id="addItemIcon">+</span>
+        <input type="text" id="newItemInput" class="add-input" placeholder="Add custom compliance requirement or document..." autocomplete="off" />
+      </form>
+
+      <div class="card">
+        <ul class="checklist" id="unifiedChecklist"></ul>
+      </div>
+
+      <div class="footer-actions">
+        <button class="footer-btn" id="btnUncheckAll" type="button">Uncheck all</button>
+        <button class="footer-btn danger" id="btnResetDefaults" type="button">Reset to standard default list</button>
+      </div>
+    `;
+
+    renderChecklist(driver, pending, completed);
+    bindMainEvents(driver);
+    updateSyncButtonsState();
+  }
+
+  function renderChecklist(driver, pending, completed) {
+    const listEl = document.getElementById("unifiedChecklist");
+    listEl.innerHTML = "";
+
+    if (driver.items.length === 0) {
+      listEl.innerHTML = '<li class="empty-main">No checklist items. Add one above or reset to the standard defaults.</li>';
+      return;
+    }
+
+    pending.forEach((item) => listEl.appendChild(buildItemEl(item)));
+
+    if (completed.length > 0) {
+      const divider = document.createElement("li");
+      divider.className = "divider-row";
+      divider.textContent = `Completed Documents (${completed.length})`;
+      listEl.appendChild(divider);
+      completed.forEach((item) => listEl.appendChild(buildItemEl(item)));
+    }
+  }
+
+  function buildItemEl(item) {
+    const li = document.createElement("li");
+    li.className = `checklist-item ${item.completed ? "completed" : ""} ${item.hasIssue ? "has-issue" : ""}`;
+
+    let fileActionHtml = "";
+    if (item.fileId) {
+      fileActionHtml = `
+        <span class="doc-badge" data-action="view-file" data-file-id="${item.fileId}" data-title="${escapeHtmlAttr(item.text)}">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+          <span class="label">View</span>
+        </span>
+        <button class="remove-doc-btn" type="button" data-action="remove-file" title="Remove file" aria-label="Remove file">&times;</button>
+      `;
+    } else {
+      fileActionHtml = `
+        <label class="upload-btn-label" title="Upload document">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path>
+          </svg>
+          <input type="file" class="hidden-file-input" accept=".pdf,image/*" data-action="upload-file" />
+        </label>
+      `;
+    }
+
+    li.innerHTML = `
+      <div class="checklist-row-main">
+        <div class="btn-group-toggle">
+          <button class="checkbox-btn" type="button" data-action="toggle-complete" aria-label="Toggle complete">
+            <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>
+          </button>
+          <button class="issue-btn" type="button" data-action="toggle-issue" title="Flag issue / Add comment" aria-label="Flag issue">!</button>
+        </div>
+
+        <div class="item-content" contenteditable="true" spellcheck="false" data-action="edit-text">${escapeHtml(item.text)}</div>
+
+        <div class="file-actions">
+          ${fileActionHtml}
+        </div>
+
+        <button class="delete-btn" type="button" data-action="delete-item" title="Delete item" aria-label="Delete item">&times;</button>
+      </div>
+
+      <div class="comment-drawer">
+        <textarea class="comment-input" data-action="edit-comment" placeholder="Describe issue (e.g. Expired, missing stamp, waiting on carrier)...">${escapeHtml(item.comment || "")}</textarea>
+      </div>
+    `;
+
+    const itemId = item.id;
+
+    li.querySelector('[data-action="toggle-complete"]').addEventListener("click", () => toggleItem(itemId));
+    li.querySelector('[data-action="toggle-issue"]').addEventListener("click", () => toggleIssue(itemId));
+    li.querySelector('[data-action="delete-item"]').addEventListener("click", () => deleteItem(itemId));
+
+    const contentEl = li.querySelector('[data-action="edit-text"]');
+    contentEl.addEventListener("blur", () => updateItemText(itemId, contentEl.innerText));
+    contentEl.addEventListener("keydown", (e) => handleKeyEdit(e, contentEl));
+
+    const commentEl = li.querySelector('[data-action="edit-comment"]');
+    if (commentEl) {
+      commentEl.addEventListener("input", () => updateItemComment(itemId, commentEl.value));
+    }
+
+    const viewBadge = li.querySelector('[data-action="view-file"]');
+    if (viewBadge) {
+      viewBadge.addEventListener("click", () => viewDocument(viewBadge.dataset.fileId, viewBadge.dataset.title));
+    }
+
+    const removeFileBtn = li.querySelector('[data-action="remove-file"]');
+    if (removeFileBtn) {
+      removeFileBtn.addEventListener("click", () => removeAttachedFile(itemId));
+    }
+
+    const uploadInput = li.querySelector('[data-action="upload-file"]');
+    if (uploadInput) {
+      uploadInput.addEventListener("change", () => uploadFile(itemId, uploadInput));
+    }
+
+    return li;
+  }
+
+  // ---------------------------------------------------------------------
+  // Mutations
+  // ---------------------------------------------------------------------
+
+  function toggleItem(id) {
+    const driver = currentDriver();
+    if (!driver) return;
+    const item = driver.items.find((i) => i.id === id);
+    if (!item) return;
+    item.completed = !item.completed;
+    if (item.completed) {
+      item.hasIssue = false;
+      item.comment = "";
+    }
+    dbSaveState();
+    render();
+  }
+
+  function toggleIssue(id) {
+    const driver = currentDriver();
+    if (!driver) return;
+    const item = driver.items.find((i) => i.id === id);
+    if (!item) return;
+    item.hasIssue = !item.hasIssue;
+    if (item.hasIssue) item.completed = false;
+    dbSaveState();
+    render();
+  }
+
+  function updateItemComment(id, text) {
+    const driver = currentDriver();
+    if (!driver) return;
+    const item = driver.items.find((i) => i.id === id);
+    if (item) {
+      item.comment = text;
+      dbSaveState();
+    }
+  }
+
+  function updateItemText(id, newText) {
+    const driver = currentDriver();
+    if (!driver) return;
+    const item = driver.items.find((i) => i.id === id);
+    const clean = (newText || "").trim();
+    if (item && clean.length > 0) {
+      item.text = clean;
+      dbSaveState();
+      renderSidebar();
+    } else if (clean.length === 0) {
+      deleteItem(id);
+    }
+  }
+
+  function handleKeyEdit(e, el) {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      el.blur();
+    }
+  }
+
+  function deleteItem(id) {
+    const driver = currentDriver();
+    if (!driver) return;
+    const item = driver.items.find((i) => i.id === id);
+    if (item && item.fileId) dbDeleteFile(item.fileId);
+    driver.items = driver.items.filter((i) => i.id !== id);
+    dbSaveState();
+    render();
+  }
+
+  function uncheckAll() {
+    const driver = currentDriver();
+    if (!driver) return;
+    driver.items.forEach((i) => (i.completed = false));
+    dbSaveState();
+    render();
+    showToast("All items marked pending");
+  }
+
+  function resetDefaultItems() {
+    const driver = currentDriver();
+    if (!driver) return;
+    if (!confirm(`Reset all checklist items for ${driver.name} to standard compliance defaults? Custom items and uploaded documents for this driver will be removed.`)) {
+      return;
+    }
+    driver.items.forEach((it) => {
+      if (it.fileId) dbDeleteFile(it.fileId);
+    });
+    driver.items = buildDefaultItems();
+    dbSaveState();
+    render();
+    showToast("Checklist reset to defaults");
+  }
+
+  async function uploadFile(itemId, inputElement) {
+    const file = inputElement.files[0];
+    if (!file) return;
+
+    if (file.size > MAX_FILE_BYTES) {
+      showToast("File is too large (20MB max)");
+      inputElement.value = "";
+      return;
+    }
+
+    const driver = currentDriver();
+    if (!driver) return;
+    const item = driver.items.find((i) => i.id === itemId);
+    if (!item) return;
+
+    const fileId = "file_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7);
+
+    try {
+      await dbSaveFile(fileId, { name: file.name, type: file.type, blob: file });
+    } catch (err) {
+      showToast("Could not save the file on this device");
+      return;
+    }
+
+    item.fileId = fileId;
+    item.fileName = file.name;
+    item.completed = true;
+    item.hasIssue = false;
+    item.comment = "";
+
+    dbSaveState();
+    render();
+    showToast("Document uploaded");
+  }
+
+  async function removeAttachedFile(itemId) {
+    const driver = currentDriver();
+    if (!driver) return;
+    const item = driver.items.find((i) => i.id === itemId);
+    if (item && item.fileId) {
+      dbDeleteFile(item.fileId);
+      item.fileId = null;
+      item.fileName = null;
+      dbSaveState();
+      render();
+    }
+  }
+
+  async function viewDocument(fileId, title) {
+    const record = await dbGetFile(fileId);
+    if (!record) {
+      showToast("Document not found");
+      return;
+    }
+
+    const modal = document.getElementById("docModal");
+    const modalBody = document.getElementById("modalBody");
+    document.getElementById("modalDocTitle").textContent = `${title} (${record.name})`;
+
+    modalBody.innerHTML = "";
+    const fileUrl = URL.createObjectURL(record.blob);
+
+    if (record.type === "application/pdf") {
+      const iframe = document.createElement("iframe");
+      iframe.src = fileUrl;
+      modalBody.appendChild(iframe);
+    } else {
+      const img = document.createElement("img");
+      img.src = fileUrl;
+      modalBody.appendChild(img);
+    }
+
+    modal.style.display = "flex";
+  }
+
+  function closeDocModal() {
+    document.getElementById("docModal").style.display = "none";
+    document.getElementById("modalBody").innerHTML = "";
+  }
+
+  function selectDriver(id) {
+    state.selectedDriverId = id;
+    dbSaveState();
+    render();
+    closeSidebarDrawer();
+  }
+
+  function deleteDriver(e, id) {
+    e.stopPropagation();
+    const target = state.drivers.find((d) => d.id === id);
+    if (!target) return;
+    if (!confirm(`Delete ${target.name} and their compliance documentation? This cannot be undone.`)) return;
+
+    target.items.forEach((it) => {
+      if (it.fileId) dbDeleteFile(it.fileId);
+    });
+
+    state.drivers = state.drivers.filter((d) => d.id !== id);
+    if (state.selectedDriverId === id) {
+      state.selectedDriverId = state.drivers.length > 0 ? state.drivers[0].id : null;
+    }
+    dbSaveState();
+    render();
+  }
+
+  function saveDriverName(val) {
+    const driver = currentDriver();
+    if (driver && val.trim()) {
+      driver.name = val.trim();
+      dbSaveState();
+      renderSidebar();
+      document.getElementById("mobileTitle").textContent = driver.name;
+    }
+  }
+
+  function updateDriverMeta(field, val) {
+    const driver = currentDriver();
+    if (driver) {
+      driver[field] = val;
+      dbSaveState();
+      renderSidebar();
+    }
+  }
+
+  // ---------------------------------------------------------------------
+  // Google Sheets sync
+  // ---------------------------------------------------------------------
+
+  function updateSyncButtonsState() {
+    const configured = Boolean(settings.scriptUrl);
+    const syncAllBtn = document.getElementById("btnSyncAll");
+    const syncOneBtn = document.getElementById("btnSyncCloud");
+    [syncAllBtn, syncOneBtn].forEach((btn) => {
+      if (!btn) return;
+      btn.title = configured
+        ? btn.title.replace("Configure sync in Settings to enable.", "").trim()
+        : "Configure sync in Settings to enable.";
+    });
+  }
+
+  function formatDriverPayload(driver) {
+    return {
+      driverName: driver.name,
+      truck: driver.truck || "",
+      trailer: driver.trailer || "",
+      items: driver.items.map((it) => ({
+        text: it.text,
+        completed: Boolean(it.completed),
+        hasIssue: Boolean(it.hasIssue),
+        comment: it.completed ? "" : it.comment || "",
+      })),
+    };
+  }
+
+  function sendViaForm(payload) {
+    return new Promise((resolve) => {
+      const form = document.getElementById("hiddenSyncForm");
+      const input = document.getElementById("hiddenPayloadInput");
+      const iframe = document.getElementById("sync_target_frame");
+
+      form.action = settings.scriptUrl;
+      input.value = JSON.stringify(payload);
+
+      let done = false;
+      const callback = () => {
+        if (!done) {
+          done = true;
+          iframe.removeEventListener("load", callback);
+          resolve();
+        }
+      };
+
+      iframe.addEventListener("load", callback);
+      form.submit();
+      setTimeout(callback, 2500);
+    });
+  }
+
+  async function syncSingleDriver() {
+    if (!settings.scriptUrl) {
+      showToast("Set a Google Sheets sync URL in Settings first");
+      openSettingsModal();
+      return;
+    }
+    const driver = currentDriver();
+    if (!driver) return;
+
+    const syncBtn = document.getElementById("btnSyncCloud");
+    const originalText = syncBtn.innerHTML;
+    syncBtn.innerHTML = "⏳ Syncing...";
+    syncBtn.disabled = true;
+
+    try {
+      await sendViaForm(formatDriverPayload(driver));
+      syncBtn.innerHTML = `✅ Saved ${escapeHtml(driver.name)}!`;
+      setTimeout(() => {
+        syncBtn.innerHTML = originalText;
+        syncBtn.disabled = false;
+      }, 2500);
+    } catch (err) {
+      showToast("Sync failed: " + err.message);
+      syncBtn.innerHTML = originalText;
+      syncBtn.disabled = false;
+    }
+  }
+
+  async function syncAllDrivers() {
+    if (!settings.scriptUrl) {
+      showToast("Set a Google Sheets sync URL in Settings first");
+      openSettingsModal();
+      return;
+    }
+    if (!state.drivers || state.drivers.length === 0) return;
+
+    const allBtn = document.getElementById("btnSyncAll");
+    const originalText = allBtn.innerHTML;
+    allBtn.disabled = true;
+
+    for (let i = 0; i < state.drivers.length; i++) {
+      const d = state.drivers[i];
+      allBtn.innerHTML = `⏳ Syncing ${i + 1}/${state.drivers.length}...`;
+      await sendViaForm(formatDriverPayload(d));
+      await new Promise((r) => setTimeout(r, 700));
+    }
+
+    allBtn.innerHTML = "✅ All drivers synced!";
+    setTimeout(() => {
+      allBtn.innerHTML = originalText;
+      allBtn.disabled = false;
+    }, 2500);
+  }
+
+  // ---------------------------------------------------------------------
+  // Backup / restore
+  // ---------------------------------------------------------------------
+
+  function blobToBase64(blob) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  }
+
+  function base64ToBlob(dataUrl) {
+    return fetch(dataUrl).then((r) => r.blob());
+  }
+
+  async function exportBackup() {
+    showToast("Preparing backup...");
+    const driversOut = [];
+
+    for (const driver of state.drivers) {
+      const itemsOut = [];
+      for (const item of driver.items) {
+        const out = { ...item };
+        if (item.fileId) {
+          const record = await dbGetFile(item.fileId);
+          if (record) {
+            out.fileData = await blobToBase64(record.blob);
+            out.fileType = record.type;
+          }
+        }
+        itemsOut.push(out);
+      }
+      driversOut.push({ ...driver, items: itemsOut });
+    }
+
+    const backup = {
+      app: "checklist-platform",
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      drivers: driversOut,
+    };
+
+    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const stamp = new Date().toISOString().slice(0, 10);
+    a.href = url;
+    a.download = `driver-compliance-backup-${stamp}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+    showToast("Backup downloaded");
+  }
+
+  async function importBackupFromFile(file) {
+    let parsed;
+    try {
+      const text = await file.text();
+      parsed = JSON.parse(text);
+    } catch (err) {
+      showToast("That file isn't a valid backup");
+      return;
+    }
+
+    if (!parsed || !Array.isArray(parsed.drivers)) {
+      showToast("That file isn't a valid backup");
+      return;
+    }
+
+    if (!confirm(`Import ${parsed.drivers.length} driver(s) from this backup? This replaces all data currently on this device.`)) {
+      return;
+    }
+
+    showToast("Importing backup...");
+
+    const newDrivers = [];
+    for (const driver of parsed.drivers) {
+      const newItems = [];
+      for (const item of driver.items || []) {
+        const newItem = {
+          id: item.id || "doc_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
+          text: item.text || "Untitled item",
+          completed: Boolean(item.completed),
+          hasIssue: Boolean(item.hasIssue),
+          comment: item.comment || "",
+          fileId: null,
+          fileName: null,
+        };
+        if (item.fileData) {
+          try {
+            const blob = await base64ToBlob(item.fileData);
+            const fileId = "file_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7);
+            await dbSaveFile(fileId, { name: item.fileName || "document", type: item.fileType || blob.type, blob });
+            newItem.fileId = fileId;
+            newItem.fileName = item.fileName || "document";
+          } catch (err) {
+            // Skip the attachment but keep the checklist item itself.
+          }
+        }
+        newItems.push(newItem);
+      }
+      newDrivers.push({
+        id: driver.id || "d_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
+        name: driver.name || "Unnamed driver",
+        truck: driver.truck || "",
+        trailer: driver.trailer || "",
+        items: newItems,
+      });
+    }
+
+    // Clear existing attachments before swapping state to avoid orphaned blobs.
+    for (const driver of state.drivers) {
+      for (const item of driver.items) {
+        if (item.fileId) dbDeleteFile(item.fileId);
+      }
+    }
+
+    state = {
+      selectedDriverId: newDrivers[0] ? newDrivers[0].id : null,
+      drivers: newDrivers,
+    };
+    dbSaveState();
+    render();
+    showToast(`Imported ${newDrivers.length} driver(s)`);
+  }
+
+  // ---------------------------------------------------------------------
+  // Settings modal
+  // ---------------------------------------------------------------------
+
+  function openSettingsModal() {
+    document.getElementById("scriptUrlInput").value = settings.scriptUrl || "";
+    document.getElementById("settingsModal").style.display = "flex";
+  }
+
+  function closeSettingsModal() {
+    document.getElementById("settingsModal").style.display = "none";
+  }
+
+  function saveScriptUrl() {
+    const val = document.getElementById("scriptUrlInput").value.trim();
+    settings.scriptUrl = val;
+    dbSaveSettings();
+    updateSyncButtonsState();
+    showToast(val ? "Sync URL saved" : "Sync URL cleared");
+    closeSettingsModal();
+  }
+
+  function clearScriptUrl() {
+    settings.scriptUrl = "";
+    document.getElementById("scriptUrlInput").value = "";
+    dbSaveSettings();
+    updateSyncButtonsState();
+    showToast("Sync URL cleared");
+  }
+
+  // ---------------------------------------------------------------------
+  // Sidebar drawer (mobile)
+  // ---------------------------------------------------------------------
+
+  function openSidebarDrawer() {
+    document.getElementById("sidebar").classList.add("open");
+    document.getElementById("sidebarBackdrop").classList.add("open");
+  }
+
+  function closeSidebarDrawer() {
+    document.getElementById("sidebar").classList.remove("open");
+    document.getElementById("sidebarBackdrop").classList.remove("open");
+  }
+
+  // ---------------------------------------------------------------------
+  // Escaping helpers
+  // ---------------------------------------------------------------------
+
+  function escapeHtml(string) {
+    return String(string)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  }
+
+  function escapeHtmlAttr(string) {
+    return escapeHtml(string);
+  }
+
+  // ---------------------------------------------------------------------
+  // Event binding
+  // ---------------------------------------------------------------------
+
+  function bindMainEvents(driver) {
+    document.getElementById("driverTitle").addEventListener("blur", (e) => saveDriverName(e.target.innerText));
+    document.getElementById("driverTitle").addEventListener("keydown", (e) => handleKeyEdit(e, e.target));
+
+    document.getElementById("truckUnitInput").addEventListener("input", (e) => updateDriverMeta("truck", e.target.value));
+    document.getElementById("trailerUnitInput").addEventListener("input", (e) => updateDriverMeta("trailer", e.target.value));
+
+    document.getElementById("addItemIcon").addEventListener("click", () => document.getElementById("newItemInput").focus());
+
+    document.getElementById("addItemForm").addEventListener("submit", (e) => {
+      e.preventDefault();
+      const input = document.getElementById("newItemInput");
+      const val = input.value.trim();
+      if (!val) return;
+      driver.items.push({
+        id: "item_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
+        text: val,
+        completed: false,
+        hasIssue: false,
+        comment: "",
+        fileId: null,
+        fileName: null,
+      });
+      dbSaveState();
+      render();
+      showToast("Item added");
+    });
+
+    document.getElementById("btnUncheckAll").addEventListener("click", uncheckAll);
+    document.getElementById("btnResetDefaults").addEventListener("click", resetDefaultItems);
+    document.getElementById("btnSyncAll").addEventListener("click", syncAllDrivers);
+    document.getElementById("btnSyncCloud").addEventListener("click", syncSingleDriver);
+  }
+
+  function bindStaticEvents() {
+    document.getElementById("addDriverForm").addEventListener("submit", (e) => {
+      e.preventDefault();
+      const input = document.getElementById("driverNameInput");
+      const name = input.value.trim();
+      if (!name) return;
+
+      const newDriver = {
+        id: "d_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
+        name,
+        truck: "",
+        trailer: "",
+        items: buildDefaultItems(),
+      };
+
+      state.drivers.push(newDriver);
+      state.selectedDriverId = newDriver.id;
+      input.value = "";
+      dbSaveState();
+      render();
+    });
+
+    document.getElementById("driverSearchInput").addEventListener("input", (e) => {
+      driverSearch = e.target.value;
+      renderSidebar();
+    });
+
+    document.getElementById("btnOpenSidebar").addEventListener("click", openSidebarDrawer);
+    document.getElementById("sidebarBackdrop").addEventListener("click", closeSidebarDrawer);
+
+    document.getElementById("btnOpenSettingsDesktop").addEventListener("click", openSettingsModal);
+    document.getElementById("btnOpenSettingsMobile").addEventListener("click", openSettingsModal);
+    document.getElementById("btnCloseSettingsModal").addEventListener("click", closeSettingsModal);
+    document.getElementById("settingsModal").addEventListener("click", closeSettingsModal);
+    document.getElementById("btnSaveScriptUrl").addEventListener("click", saveScriptUrl);
+    document.getElementById("btnClearScriptUrl").addEventListener("click", clearScriptUrl);
+
+    document.getElementById("btnCloseDocModal").addEventListener("click", closeDocModal);
+    document.getElementById("docModal").addEventListener("click", closeDocModal);
+
+    document.getElementById("btnExport").addEventListener("click", exportBackup);
+    document.getElementById("btnExportInSettings").addEventListener("click", exportBackup);
+
+    const importInput = document.getElementById("importFileInput");
+    document.getElementById("btnImport").addEventListener("click", () => importInput.click());
+    document.getElementById("btnImportInSettings").addEventListener("click", () => importInput.click());
+    importInput.addEventListener("change", () => {
+      const file = importInput.files[0];
+      if (file) importBackupFromFile(file);
+      importInput.value = "";
+    });
+
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") {
+        closeDocModal();
+        closeSettingsModal();
+        closeSidebarDrawer();
+      }
+    });
+  }
+
+  init();
+})();
+</script>
+</body>
+</html>

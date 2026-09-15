@@ -1988,12 +1988,14 @@
       driverName: driver.name,
       truck: driver.truck || "",
       trailer: driver.trailer || "",
+      // "removed" (soft-deleted requirements) is deliberately not sent —
+      // the sheet's per-driver table only has Item/Completed/Has
+      // Issue/Comment columns, so that status stays local-only.
       items: driver.items.map((it) => ({
         text: it.text,
         completed: Boolean(it.completed),
         hasIssue: Boolean(it.hasIssue),
         comment: it.completed ? "" : it.comment || "",
-        removed: Boolean(it.removed),
       })),
     };
   }
@@ -2113,7 +2115,7 @@
             completed: Boolean(it.completed),
             hasIssue: Boolean(it.hasIssue),
             comment: it.comment || "",
-            removed: Boolean(it.removed),
+            removed: false,
             fileId: null,
             fileName: null,
           })),
@@ -2130,16 +2132,17 @@
         const text = (rit.text || "").trim();
         if (!text) return;
         const localItem = existing.items.find((li) => li.text.trim().toLowerCase() === text.toLowerCase());
+        // "removed" is intentionally left alone here — it's not part of
+        // the sheet's per-item columns, so it stays whatever this device
+        // already had (see formatDriverPayload).
         if (localItem) {
           const changed =
             localItem.completed !== Boolean(rit.completed) ||
             localItem.hasIssue !== Boolean(rit.hasIssue) ||
-            Boolean(localItem.removed) !== Boolean(rit.removed) ||
             (localItem.comment || "") !== (rit.comment || "");
           localItem.completed = Boolean(rit.completed);
           localItem.hasIssue = Boolean(rit.hasIssue);
           localItem.comment = rit.comment || "";
-          localItem.removed = Boolean(rit.removed);
           if (changed) updatedItems++;
         } else {
           existing.items.push({
@@ -2148,7 +2151,7 @@
             completed: Boolean(rit.completed),
             hasIssue: Boolean(rit.hasIssue),
             comment: rit.comment || "",
-            removed: Boolean(rit.removed),
+            removed: false,
             fileId: null,
             fileName: null,
           });

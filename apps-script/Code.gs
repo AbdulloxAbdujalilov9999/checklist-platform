@@ -10,31 +10,34 @@
  *   Row 1: Truck:   <truck>
  *   Row 2: Trailer: <trailer>
  *   Row 3: (blank)
- *   Row 4: Item | Completed | Has Issue | Comment | Removed   <- header
+ *   Row 4: Item | Completed | Has Issue | Comment   <- header
  *   Row 5+: one row per checklist item, with real checkboxes on the
- *           Completed / Has Issue / Removed columns — ticking one by hand
- *           in the sheet is picked up on the next pull, same as an edit
- *           made in the app.
+ *           Completed / Has Issue columns — ticking one by hand in the
+ *           sheet is picked up on the next pull, same as an edit made in
+ *           the app.
  *
- * A hidden "Index" tab tracks which tab belongs to which driver (by the
- * app's own driver id, so renaming a driver renames its tab instead of
- * creating a duplicate) and a "DeletedDrivers" tab tombstones driver ids
- * that were deliberately deleted, so a stale push can't resurrect one.
+ * A single "Index" tab (kept as the LAST tab in the spreadsheet, so driver
+ * tabs stay up front) tracks every driver ever synced: which tab belongs to
+ * which driver id (so renaming a driver renames its tab instead of
+ * creating a duplicate), and a "Removed" checkbox column that marks a
+ * driver as deleted instead of ever deleting its Index row — a deleted
+ * driver's row stays as a record, just flagged, so a stale push can't
+ * resurrect it.
  *
  * Manually deleting a driver's tab in the Sheet is itself treated as a
  * delete: both doPost (push) and doGet (pull) notice the Index points at a
- * tab that no longer exists, and self-heal by tombstoning that driver id
- * instead of recreating it — so deleting a tab by hand is enough, you don't
- * have to also edit the Index or DeletedDrivers tabs.
+ * tab that no longer exists and flag that row Removed instead of
+ * recreating it — so deleting a tab by hand is enough, you don't have to
+ * also edit the Index.
  *
  * doPost (called by "Sync to Sheet" / "Sync All", and by driver deletion):
  *   - payload.action === "deleteDriver": deletes the driver's tab and
- *     tombstones their id.
+ *     flags their Index row Removed.
  *   - otherwise: creates or updates the driver's tab (payload needs id,
  *     driverName, truck, trailer, items).
- * doGet (called when the app pulls team changes): returns every driver
- *   (id, driverName, truck, trailer, items, updatedAt) by reading each
- *   tab listed in the Index.
+ * doGet (called when the app pulls team changes): returns every
+ *   non-removed driver (id, driverName, truck, trailer, items, updatedAt)
+ *   by reading each tab listed in the Index.
  *
  * doGet responds JSONP-style (wrapping the JSON in a callback function call)
  * when called with a `callback` query parameter, which is how the app calls
@@ -45,17 +48,20 @@
  */
 
 var INDEX_SHEET_NAME = "Index";
-var INDEX_HEADER_ROW = ["Driver ID", "Tab Name", "Driver Name", "Truck", "Trailer", "Updated At"];
+var INDEX_HEADER_ROW = ["Driver ID", "Tab Name", "Driver Name", "Truck", "Trailer", "Updated At", "Removed"];
+var INDEX_COL_REMOVED = 7;
 
-var DELETED_SHEET_NAME = "DeletedDrivers";
-var DELETED_HEADER_ROW = ["Driver ID", "Driver Name", "Deleted At"];
-
-var TABLE_HEADER_ROW = ["Item", "Completed", "Has Issue", "Comment", "Removed"];
+var TABLE_HEADER_ROW = ["Item", "Completed", "Has Issue", "Comment"];
 var ITEMS_START_ROW = 5;
-var RESERVED_SHEET_NAMES = [INDEX_SHEET_NAME, DELETED_SHEET_NAME];
+var RESERVED_SHEET_NAMES = [INDEX_SHEET_NAME];
 
 function getSpreadsheet_() {
   return SpreadsheetApp.getActiveSpreadsheet();
+}
+
+function moveToEnd_(ss, sheet) {
+  ss.setActiveSheet(sheet);
+  ss.moveActiveSheet(ss.getNumSheets());
 }
 
 function getIndexSheet_() {
@@ -65,17 +71,7 @@ function getIndexSheet_() {
     sheet = ss.insertSheet(INDEX_SHEET_NAME);
     sheet.appendRow(INDEX_HEADER_ROW);
     sheet.setFrozenRows(1);
-  }
-  return sheet;
-}
-
-function getDeletedSheet_() {
-  var ss = getSpreadsheet_();
-  var sheet = ss.getSheetByName(DELETED_SHEET_NAME);
-  if (!sheet) {
-    sheet = ss.insertSheet(DELETED_SHEET_NAME);
-    sheet.appendRow(DELETED_HEADER_ROW);
-    sheet.setFrozenRows(1);
+    moveToEnd_(ss, sheet);
   }
   return sheet;
 }
@@ -125,8 +121,8 @@ function doGet(e) {
 // Index helpers
 // ---------------------------------------------------------------------
 
-// Returns {rowIndex, tabName, driverName, truck, trailer} (1-based rowIndex
-// into the Index sheet) or null if this driver id isn't indexed.
+// Returns {rowIndex, tabName, driverName, truck, trailer, removed} (1-based
+// rowIndex into the Index sheet) or null if this driver id isn't indexed.
 function findIndexRow_(indexSheet, driverId) {
   var data = indexSheet.getDataRange().getValues();
   for (var i = 1; i < data.length; i++) {
@@ -137,6 +133,7 @@ function findIndexRow_(indexSheet, driverId) {
         driverName: data[i][2],
         truck: data[i][3],
         trailer: data[i][4],
+        removed: Boolean(data[i][6]),
       };
     }
   }
@@ -144,31 +141,27 @@ function findIndexRow_(indexSheet, driverId) {
 }
 
 function appendIndexRow_(indexSheet, row) {
-  indexSheet.appendRow([row.id, row.tabName, row.driverName, row.truck || "", row.trailer || "", new Date().toISOString()]);
+  indexSheet.appendRow([
+    row.id,
+    row.tabName,
+    row.driverName,
+    row.truck || "",
+    row.trailer || "",
+    new Date().toISOString(),
+    false,
+  ]);
+  var lastRow = indexSheet.getLastRow();
+  indexSheet.getRange(lastRow, INDEX_COL_REMOVED, 1, 1).insertCheckboxes();
 }
 
 function updateIndexRow_(indexSheet, rowIndex, row) {
   indexSheet
-    .getRange(rowIndex, 1, 1, INDEX_HEADER_ROW.length)
+    .getRange(rowIndex, 1, 1, 6)
     .setValues([[row.id, row.tabName, row.driverName, row.truck || "", row.trailer || "", new Date().toISOString()]]);
 }
 
-function removeIndexRowAt_(indexSheet, rowIndex) {
-  indexSheet.deleteRow(rowIndex);
-}
-
-function isDeleted_(deletedSheet, driverId) {
-  var data = deletedSheet.getDataRange().getValues();
-  for (var i = 1; i < data.length; i++) {
-    if (String(data[i][0]) === String(driverId)) return true;
-  }
-  return false;
-}
-
-function tombstone_(deletedSheet, driverId, driverName) {
-  if (!driverId) return;
-  if (isDeleted_(deletedSheet, driverId)) return;
-  deletedSheet.appendRow([driverId, driverName || "", new Date().toISOString()]);
+function markIndexRowRemoved_(indexSheet, rowIndex) {
+  indexSheet.getRange(rowIndex, INDEX_COL_REMOVED, 1, 1).setValue(true);
 }
 
 // ---------------------------------------------------------------------
@@ -186,7 +179,7 @@ function sanitizeTabName_(name) {
 
 // Ensures the tab name is unique among real sheet tabs, excluding the given
 // existing tab name (so renaming a driver back to a name it already had
-// doesn't collide with itself) and the reserved Index/DeletedDrivers tabs.
+// doesn't collide with itself) and the reserved Index tab.
 function uniqueTabName_(ss, baseName, currentTabName) {
   var existing = {};
   ss.getSheets().forEach(function (s) {
@@ -213,14 +206,13 @@ function writeDriverTable_(tab, name, truck, trailer, items) {
   tab.getRange(4, 1, 1, TABLE_HEADER_ROW.length).setFontWeight("bold");
 
   var rows = (items || []).map(function (it) {
-    return [it.text || "", Boolean(it.completed), Boolean(it.hasIssue), it.comment || "", Boolean(it.removed)];
+    return [it.text || "", Boolean(it.completed), Boolean(it.hasIssue), it.comment || ""];
   });
 
   if (rows.length > 0) {
-    tab.getRange(ITEMS_START_ROW, 1, rows.length, 5).setValues(rows);
+    tab.getRange(ITEMS_START_ROW, 1, rows.length, 4).setValues(rows);
     tab.getRange(ITEMS_START_ROW, 2, rows.length, 1).insertCheckboxes();
     tab.getRange(ITEMS_START_ROW, 3, rows.length, 1).insertCheckboxes();
-    tab.getRange(ITEMS_START_ROW, 5, rows.length, 1).insertCheckboxes();
   }
 
   tab.setColumnWidth(1, 260);
@@ -234,7 +226,7 @@ function readDriverTable_(tab) {
   var lastRow = tab.getLastRow();
   var items = [];
   if (lastRow >= ITEMS_START_ROW) {
-    var data = tab.getRange(ITEMS_START_ROW, 1, lastRow - ITEMS_START_ROW + 1, 5).getValues();
+    var data = tab.getRange(ITEMS_START_ROW, 1, lastRow - ITEMS_START_ROW + 1, 4).getValues();
     for (var i = 0; i < data.length; i++) {
       var text = String(data[i][0] || "").trim();
       if (!text) continue;
@@ -243,7 +235,6 @@ function readDriverTable_(tab) {
         completed: Boolean(data[i][1]),
         hasIssue: Boolean(data[i][2]),
         comment: data[i][3] || "",
-        removed: Boolean(data[i][4]),
       });
     }
   }
@@ -261,19 +252,18 @@ function upsertDriver_(payload) {
 
   var ss = getSpreadsheet_();
   var indexSheet = getIndexSheet_();
-  var deletedSheet = getDeletedSheet_();
-
-  if (isDeleted_(deletedSheet, id)) return { skipped: true };
-
   var existing = findIndexRow_(indexSheet, id);
+
+  if (existing && existing.removed) {
+    return { skipped: true, reason: "deleted" };
+  }
 
   if (existing) {
     var tab = ss.getSheetByName(existing.tabName);
     if (!tab) {
       // The tab was deleted by hand directly in the Sheet — respect that as
       // an intentional delete instead of silently recreating it.
-      removeIndexRowAt_(indexSheet, existing.rowIndex);
-      tombstone_(deletedSheet, id, name);
+      markIndexRowRemoved_(indexSheet, existing.rowIndex);
       return { skipped: true, reason: "deleted" };
     }
 
@@ -298,44 +288,39 @@ function upsertDriver_(payload) {
   var newTab = ss.insertSheet(tabName);
   writeDriverTable_(newTab, name, payload.truck, payload.trailer, payload.items);
   appendIndexRow_(indexSheet, { id: id, tabName: tabName, driverName: name, truck: payload.truck, trailer: payload.trailer });
+  moveToEnd_(ss, indexSheet);
   return { skipped: false };
 }
 
 function deleteDriverEverywhere_(id, driverName) {
   var ss = getSpreadsheet_();
   var indexSheet = getIndexSheet_();
-  var deletedSheet = getDeletedSheet_();
-
   var existing = id ? findIndexRow_(indexSheet, id) : null;
-  if (existing) {
-    var tab = ss.getSheetByName(existing.tabName);
-    if (tab) ss.deleteSheet(tab);
-    removeIndexRowAt_(indexSheet, existing.rowIndex);
-  }
-  tombstone_(deletedSheet, id, driverName);
+  if (!existing) return;
+
+  var tab = ss.getSheetByName(existing.tabName);
+  if (tab) ss.deleteSheet(tab);
+  markIndexRowRemoved_(indexSheet, existing.rowIndex);
 }
 
 function readAllDrivers_() {
   var ss = getSpreadsheet_();
   var indexSheet = getIndexSheet_();
-  var deletedSheet = getDeletedSheet_();
   var data = indexSheet.getDataRange().getValues();
   var drivers = [];
 
-  // Iterate back-to-front so deleting stale index rows mid-loop doesn't
-  // skip the row that shifts into the current position.
-  for (var i = data.length - 1; i >= 1; i--) {
+  for (var i = 1; i < data.length; i++) {
     var id = data[i][0];
     var tabName = data[i][1];
     var driverName = data[i][2];
-    if (!id) continue;
+    var removed = Boolean(data[i][6]);
+    if (!id || removed) continue;
 
     var tab = ss.getSheetByName(tabName);
     if (!tab) {
-      // Tab deleted by hand — self-heal: stop tracking it and tombstone the
-      // id so no device's next push recreates it.
-      removeIndexRowAt_(indexSheet, i + 1);
-      tombstone_(deletedSheet, id, driverName);
+      // Tab deleted by hand — self-heal: flag this row Removed so no
+      // device's next push recreates it.
+      markIndexRowRemoved_(indexSheet, i + 1);
       continue;
     }
 

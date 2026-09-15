@@ -61,20 +61,25 @@ not a hidden data blob:
 Truck:    TR-104
 Trailer:  53-V-201
                                                      <- blank spacer row
-Item                    Completed  Has Issue  Comment                Removed
-Registration            [x]        [ ]                               [ ]
-Insurance               [ ]        [ ]                               [ ]
-Cab Card / IRP          [ ]        [x]         Waiting on renewal     [ ]
+Item                    Completed  Has Issue  Comment
+Registration            [x]        [ ]
+Insurance               [ ]        [ ]
+Cab Card / IRP          [ ]        [x]         Waiting on renewal
 ...
 ```
 
-The Completed / Has Issue / Removed columns are real checkboxes — you can
-open the Sheet and tick one by hand, and the app picks that up on its next
-pull, same as if it had been changed in the app itself. Two more tabs
-support this and can be ignored: **Index** (tracks which tab belongs to
-which driver, so renaming a driver renames its tab instead of creating a
-duplicate) and **DeletedDrivers** (tracks deleted drivers so they don't get
-resurrected by a stale device — see below).
+The Completed / Has Issue columns are real checkboxes — you can open the
+Sheet and tick one by hand, and the app picks that up on its next pull,
+same as if it had been changed in the app itself. A driver's checklist
+"Removed" status (see below) is local to the app and isn't a column here —
+it doesn't sync to the sheet at all.
+
+One more tab supports this and can be left alone: **Index**, kept as the
+last tab in the spreadsheet. It's one row per driver ever synced —
+tracking which sheet tab is theirs (so renaming a driver renames its tab
+instead of creating a duplicate) and a Removed checkbox that marks a
+driver as deleted without ever deleting its row, so a stale device can't
+resurrect one (see "Deleting drivers" below).
 
 Every sync is two-way:
 
@@ -85,7 +90,7 @@ Every sync is two-way:
    the sheet but not on your device are added (so if the sheet has 10
    drivers and you only have 3, syncing brings in the other 7), and for
    drivers you already have, name/truck/trailer and each item's
-   completed/issue/comment/removed status is updated to match the sheet.
+   completed/issue/comment status is updated to match the sheet.
 
 - **Sync to Sheet** (next to the driver name, and in the header) pushes and
   pulls *only the driver you're currently viewing* — it won't pull in a
@@ -103,16 +108,16 @@ document storage.
 ### Deleting drivers
 
 Deleting via the app (pencil icon → Edit → Delete) removes that driver's
-tab from the sheet and tombstones them in DeletedDrivers, so a teammate's
-device that still has that driver locally won't just push it right back on
-their next sync.
+tab from the sheet and checks the Removed box on their Index row, so a
+teammate's device that still has that driver locally won't just push it
+right back on their next sync.
 
 **You can also just delete a driver's tab directly in the Sheet** — right-click
 the tab → Delete. The app notices the Index points at a tab that's gone and
 treats it as deleted: the next **Sync All** from any device removes that
-driver locally too. You don't need to touch the Index or DeletedDrivers
-tabs yourself; both push and pull self-heal a dangling Index entry into a
-proper tombstone the moment they notice it.
+driver locally too. You don't need to touch the Index tab yourself; both
+push and pull self-heal a dangling Index row into a proper Removed flag the
+moment they notice it.
 
 Because this now means "missing from the sheet" can delete a driver
 locally, it relies on the push that runs right before every Sync All's pull
@@ -124,7 +129,8 @@ it from a backup (see above) or just re-add it and sync again.
 
 Deleting a checklist *item* is different — see the "Removed" behavior
 higher up; that one's a visible, reversible flag on an item, not an actual
-delete, and it syncs normally as part of the driver's table either way.
+delete, and (unlike driver deletion) it's local-only and doesn't sync to
+the sheet at all.
 
 ### Why JSONP instead of fetch()
 
@@ -144,12 +150,19 @@ an error telling you to do exactly this.
 **The per-driver-tab schema above is a breaking change from earlier
 versions of `Code.gs`**, which stored everything in one flat "Drivers" list
 (with a hidden JSON blob per row) instead of one tab per driver. If your
-sheet still has that old flat "Drivers" / "DeletedDrivers" layout, redeploy
-with the current `Code.gs` the same way, then delete the old "Drivers" tab
-by hand once you've confirmed the new per-driver tabs have the data you
-expect (nothing on the *app* side depends on the old sheet layout — every
-device's own local data is unaffected, and a Sync All from each device
-repopulates the new tabs from scratch).
+sheet still has that old flat "Drivers" tab, redeploy with the current
+`Code.gs` the same way, then delete the old "Drivers" tab by hand once
+you've confirmed the new per-driver tabs have the data you expect (nothing
+on the *app* side depends on the old sheet layout — every device's own
+local data is unaffected, and a Sync All from each device repopulates the
+new tabs from scratch).
+
+If your sheet has an older *pair* of tracking tabs — a separate "Index" and
+"DeletedDrivers" — that's from a since-merged intermediate version: the
+current `Code.gs` keeps everything in one "Index" tab with a Removed
+column instead. Redeploy the same way and it'll create the merged tab
+fresh; delete the old "DeletedDrivers" tab by hand once you're happy with
+it (nothing reads it anymore).
 
 ### Using a different sheet
 

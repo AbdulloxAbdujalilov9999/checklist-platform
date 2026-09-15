@@ -33,6 +33,10 @@ folder with any static file host / GitHub Pages.
   like any other status, so a teammate's device shows the same item crossed
   out too instead of it just disappearing on theirs.
 - On mobile, tap the ☰ icon to open the driver list drawer.
+- Each driver in the sidebar has a pencil icon instead of a delete button —
+  tap it to rename the driver or delete them (deleting requires
+  confirmation, and also removes them from the shared sheet — see below).
+  There's no one-tap delete from the list anymore, on purpose.
 
 ## Backup & restore
 
@@ -66,8 +70,20 @@ updates the status of ones that already match by name, so nothing you or a
 teammate has entered gets silently wiped. Do this after any change you want
 the team to see, and again whenever you want to catch up on theirs.
 
-- **Sync to Sheet** pushes the driver you're currently viewing, then pulls.
-- **Sync All** pushes every driver on your device, then pulls.
+- **Sync to Sheet** (next to the driver name, and in the header) pushes and
+  pulls *only the driver you're currently viewing* — it won't pull in a
+  teammate's brand-new driver, just catch this one up.
+- **Sync All** pushes every driver on your device, then pulls *everything*
+  the sheet has — this is the one that brings in new drivers the rest of
+  the team has added.
+
+Deleting a driver (via the pencil icon → Edit → Delete) also tells the
+sheet: it removes that driver's row and records the name as deleted, so a
+teammate's device that still has that driver locally won't just push it
+right back on their next sync. Deleting a checklist *item* is different —
+see the "Removed" behavior above; that one's a visible, reversible flag,
+not an actual delete, and it does sync normally as part of the driver's
+data either way.
 
 Uploaded documents stay device-local (only checklist text/status syncs, not
 the files themselves) — the sheet is for shared checklist status, not
@@ -84,6 +100,13 @@ own script before this existed, redeploy it (**Deploy → Manage deployments →
 Edit → New version**, not a brand new deployment, so the URL stays the
 same) or "Sync to Sheet"/"Sync All" will push fine but the pull half will
 fail with a timeout error telling you to do exactly this.
+
+**This has changed again** to support deleting drivers (above) — `Code.gs`
+now also tracks deleted driver names in a second "DeletedDrivers" tab so a
+deletion sticks. If you deploy this update, redeploy the Apps Script the
+same way (**Deploy → Manage deployments → Edit → New version**) or driver
+deletion will remove the driver locally but leave their row in the sheet,
+where it'll get pushed right back on the next sync.
 
 ### Using a different sheet
 

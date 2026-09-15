@@ -253,20 +253,23 @@
       color: var(--warning);
     }
 
-    .driver-del-btn {
+    .driver-edit-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
       background: transparent;
       border: none;
-      color: var(--danger);
-      font-size: 18px;
+      color: var(--text-muted);
       cursor: pointer;
-      padding: 4px 6px;
+      padding: 5px 6px;
       border-radius: 6px;
       opacity: 0.7;
     }
 
-    .driver-del-btn:hover {
+    .driver-edit-btn:hover {
       opacity: 1;
-      background: rgba(255, 69, 58, 0.12);
+      color: var(--accent);
+      background: rgba(255, 255, 255, 0.06);
     }
 
     .empty-sidebar {
@@ -334,6 +337,13 @@
 
     .title-area {
       min-width: 0;
+    }
+
+    .title-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
     }
 
     .title-area h1 {
@@ -412,6 +422,11 @@
 
     .btn-sync.primary:hover {
       background: #0d6535;
+    }
+
+    .btn-sync.compact {
+      padding: 6px 11px;
+      font-size: 12px;
     }
 
     .driver-unit-inputs {
@@ -1020,8 +1035,16 @@
         justify-content: flex-start;
       }
 
-      .btn-sync {
+      .sync-bar .btn-sync {
         flex: 1;
+        justify-content: center;
+      }
+
+      .title-row {
+        width: 100%;
+      }
+
+      .title-row .btn-sync.compact {
         justify-content: center;
       }
 
@@ -1162,6 +1185,35 @@
   </div>
 </div>
 
+<!-- Edit Driver Modal (rename or delete a driver) -->
+<div class="modal-overlay" id="editDriverModal">
+  <div class="modal-box modal-narrow" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <h3>Edit driver</h3>
+      <button class="modal-close" id="btnCloseEditDriverModal" aria-label="Close">&times;</button>
+    </div>
+    <div class="settings-body">
+      <div class="settings-section">
+        <h4>Name</h4>
+        <input type="text" id="editDriverNameInput" class="settings-input" placeholder="Driver name" />
+        <div class="settings-row" style="margin-top:10px;">
+          <button class="settings-btn primary" id="btnSaveEditDriver">Save</button>
+        </div>
+      </div>
+      <div class="settings-section">
+        <h4>Delete driver</h4>
+        <p class="hint">
+          Permanently removes this driver, their checklist, and any attached documents from this
+          device — and from the shared sheet, so your team stops seeing them too. This can't be undone.
+        </p>
+        <div class="settings-row" style="margin-top:10px;">
+          <button class="settings-btn danger" id="btnDeleteEditDriver">Delete this driver</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <!-- Invisible transport form for Google Sheets sync -->
@@ -1214,6 +1266,7 @@
   };
   let settings = { scriptUrl: DEFAULT_SCRIPT_URL };
   let driverSearch = "";
+  let editingDriverId = null;
 
   // ---------------------------------------------------------------------
   // IndexedDB helpers
@@ -1422,10 +1475,15 @@
         </div>
         <div class="driver-item-actions">
           <span class="driver-badge${hasIssues ? " has-issue" : ""}">${remaining}</span>
-          <button class="driver-del-btn" type="button" aria-label="Delete driver" title="Delete driver">&times;</button>
+          <button class="driver-edit-btn" type="button" aria-label="Edit driver" title="Edit driver">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path></svg>
+          </button>
         </div>
       `;
-      li.querySelector(".driver-del-btn").addEventListener("click", (e) => deleteDriver(e, d.id));
+      li.querySelector(".driver-edit-btn").addEventListener("click", (e) => {
+        e.stopPropagation();
+        openEditDriverModal(d.id);
+      });
       listEl.appendChild(li);
     });
   }
@@ -1455,7 +1513,12 @@
     wrapper.innerHTML = `
       <header>
         <div class="title-area">
-          <h1 id="driverTitle" contenteditable="true" spellcheck="false">${escapeHtml(driver.name)}</h1>
+          <div class="title-row">
+            <h1 id="driverTitle" contenteditable="true" spellcheck="false">${escapeHtml(driver.name)}</h1>
+            <button class="btn-sync compact" id="btnSyncAll" type="button" title="Push every driver to Google Sheets, then pull in any drivers/updates your team has synced">
+              📁 Sync All
+            </button>
+          </div>
           <p>Compliance, Vehicle Binder & Safety Qualifications</p>
         </div>
         <div class="header-actions">
@@ -1464,10 +1527,7 @@
             <div class="badge-subtitle">Pending${issueCount > 0 ? ` · ${issueCount} issue${issueCount === 1 ? "" : "s"}` : ""}</div>
           </div>
           <div class="sync-bar">
-            <button class="btn-sync" id="btnSyncAll" type="button" title="Push every driver to Google Sheets, then pull in any drivers/updates your team has synced">
-              📁 Sync All
-            </button>
-            <button class="btn-sync primary" id="btnSyncCloud" type="button" title="Push this driver to Google Sheets, then pull in your team's latest changes">
+            <button class="btn-sync primary" id="btnSyncCloud" type="button" title="Push this driver to Google Sheets, then pull in just this driver's latest changes">
               ☁️ Sync to Sheet
             </button>
           </div>
@@ -1857,11 +1917,23 @@
     closeSidebarDrawer();
   }
 
-  function deleteDriver(e, id) {
-    e.stopPropagation();
+  async function deleteDriver(id) {
     const target = state.drivers.find((d) => d.id === id);
     if (!target) return;
-    if (!confirm(`Delete ${target.name} and their compliance documentation? This cannot be undone.`)) return;
+    if (!confirm(`Delete ${target.name} and their compliance documentation? This cannot be undone, and removes them from the shared sheet for the whole team.`)) {
+      return;
+    }
+
+    // Tell the shared sheet first so it isn't just a local deletion — without
+    // this, the sheet keeps the driver's row, and the next "Sync All" from
+    // this device (or a teammate's) would just push/pull it right back.
+    if (settings.scriptUrl) {
+      try {
+        await sendViaForm({ action: "deleteDriver", driverName: target.name });
+      } catch (err) {
+        // Best-effort: still delete locally even if the sheet couldn't be reached.
+      }
+    }
 
     target.items.forEach((it) => {
       if (it.fileId) dbDeleteFile(it.fileId);
@@ -2074,8 +2146,17 @@
     return { addedDrivers, addedItems, updatedItems };
   }
 
-  async function pullFromSheet() {
-    const remoteDrivers = await fetchSheetDrivers();
+  // With `onlyDriverName`, only that one driver's row is merged in — this is
+  // what "Sync to Sheet" uses, so pushing/pulling a single driver doesn't
+  // also reach out and pull in every other driver the team has synced.
+  // "Sync All" calls this with no filter, so it (and only it) picks up
+  // brand-new drivers and every other driver's updates.
+  async function pullFromSheet({ onlyDriverName } = {}) {
+    let remoteDrivers = await fetchSheetDrivers();
+    if (onlyDriverName) {
+      const target = onlyDriverName.trim().toLowerCase();
+      remoteDrivers = remoteDrivers.filter((rd) => (rd.driverName || "").trim().toLowerCase() === target);
+    }
     const summary = mergeRemoteDrivers(remoteDrivers);
     if (summary.addedDrivers || summary.addedItems || summary.updatedItems) {
       dbSaveState();
@@ -2117,7 +2198,7 @@
 
     syncBtn.innerHTML = "⏳ Pulling team changes...";
     try {
-      const summary = await pullFromSheet();
+      const summary = await pullFromSheet({ onlyDriverName: driver.name });
       syncBtn.innerHTML = `✅ Saved ${escapeHtml(driver.name)}!`;
       showToast(describeSyncSummary(summary));
     } catch (err) {
@@ -2140,37 +2221,37 @@
     if (!state.drivers || state.drivers.length === 0) return;
 
     const allBtn = document.getElementById("btnSyncAll");
-    const originalText = allBtn.innerHTML;
-    allBtn.disabled = true;
+    const originalText = allBtn ? allBtn.innerHTML : "";
+    if (allBtn) allBtn.disabled = true;
 
     try {
       for (let i = 0; i < state.drivers.length; i++) {
         const d = state.drivers[i];
-        allBtn.innerHTML = `⏳ Syncing ${i + 1}/${state.drivers.length}...`;
+        if (allBtn) allBtn.innerHTML = `⏳ Syncing ${i + 1}/${state.drivers.length}...`;
         await sendViaForm(formatDriverPayload(d));
         await new Promise((r) => setTimeout(r, 700));
       }
     } catch (err) {
       showToast("Could not push to the sheet: " + err.message);
       setTimeout(() => {
-        allBtn.innerHTML = originalText;
-        allBtn.disabled = false;
+        if (allBtn) allBtn.innerHTML = originalText;
+        if (allBtn) allBtn.disabled = false;
       }, 2500);
       return;
     }
 
-    allBtn.innerHTML = "⏳ Pulling team changes...";
+    if (allBtn) allBtn.innerHTML = "⏳ Pulling team changes...";
     try {
       const summary = await pullFromSheet();
-      allBtn.innerHTML = "✅ All drivers synced!";
+      if (allBtn) allBtn.innerHTML = "✅ All drivers synced!";
       showToast(describeSyncSummary(summary));
     } catch (err) {
-      allBtn.innerHTML = "✅ Pushed, pull failed";
+      if (allBtn) allBtn.innerHTML = "✅ Pushed, pull failed";
       showToast(`Pushed OK, but couldn't pull team changes: ${err.message}`);
     } finally {
       setTimeout(() => {
-        allBtn.innerHTML = originalText;
-        allBtn.disabled = false;
+        if (allBtn) allBtn.innerHTML = originalText;
+        if (allBtn) allBtn.disabled = false;
       }, 2500);
     }
   }
@@ -2336,6 +2417,47 @@
   }
 
   // ---------------------------------------------------------------------
+  // Edit driver modal (rename / delete)
+  // ---------------------------------------------------------------------
+
+  function openEditDriverModal(id) {
+    const driver = state.drivers.find((d) => d.id === id);
+    if (!driver) return;
+    editingDriverId = id;
+    document.getElementById("editDriverNameInput").value = driver.name;
+    document.getElementById("editDriverModal").style.display = "flex";
+  }
+
+  function closeEditDriverModal() {
+    document.getElementById("editDriverModal").style.display = "none";
+    editingDriverId = null;
+  }
+
+  function saveEditDriverName() {
+    const driver = state.drivers.find((d) => d.id === editingDriverId);
+    if (!driver) return;
+    const val = document.getElementById("editDriverNameInput").value.trim();
+    if (!val) {
+      showToast("Driver name can't be empty");
+      return;
+    }
+    driver.name = val;
+    dbSaveState();
+    render();
+    showToast("Driver updated");
+    closeEditDriverModal();
+  }
+
+  async function deleteEditDriver() {
+    const id = editingDriverId;
+    if (!id) return;
+    await deleteDriver(id);
+    if (!state.drivers.find((d) => d.id === id)) {
+      closeEditDriverModal();
+    }
+  }
+
+  // ---------------------------------------------------------------------
   // Sidebar drawer (mobile)
   // ---------------------------------------------------------------------
 
@@ -2442,6 +2564,11 @@
     document.getElementById("btnSaveScriptUrl").addEventListener("click", saveScriptUrl);
     document.getElementById("btnClearScriptUrl").addEventListener("click", clearScriptUrl);
 
+    document.getElementById("btnCloseEditDriverModal").addEventListener("click", closeEditDriverModal);
+    document.getElementById("editDriverModal").addEventListener("click", closeEditDriverModal);
+    document.getElementById("btnSaveEditDriver").addEventListener("click", saveEditDriverName);
+    document.getElementById("btnDeleteEditDriver").addEventListener("click", deleteEditDriver);
+
     document.getElementById("btnCloseDocModal").addEventListener("click", closeDocModal);
     document.getElementById("docModal").addEventListener("click", closeDocModal);
 
@@ -2461,6 +2588,7 @@
       if (e.key === "Escape") {
         closeDocModal();
         closeSettingsModal();
+        closeEditDriverModal();
         closeSidebarDrawer();
       }
     });

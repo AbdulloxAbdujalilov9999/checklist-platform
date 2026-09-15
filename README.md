@@ -25,6 +25,13 @@ folder with any static file host / GitHub Pages.
   leave a comment.
 - Tap the paperclip to attach a PDF/photo to an item (this also marks it
   complete); tap **View** to preview it, or the `×` to remove it.
+- The `×` on a checklist item doesn't delete it — it moves the item to a
+  **Removed** section at the bottom, struck through, so the team can still
+  see it used to be a requirement. Tap the ↺ restore icon there to bring it
+  back, or the `×` again to delete it permanently (this second delete is the
+  only one that's unrecoverable, and it needs confirmation). "Removed" syncs
+  like any other status, so a teammate's device shows the same item crossed
+  out too instead of it just disappearing on theirs.
 - On mobile, tap the ☰ icon to open the driver list drawer.
 
 ## Backup & restore

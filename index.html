@@ -603,6 +603,30 @@
       text-decoration: none !important;
     }
 
+    .checklist-item.removed {
+      opacity: 0.62;
+    }
+
+    .checklist-item.removed .item-content {
+      color: var(--text-muted);
+      text-decoration: line-through !important;
+      cursor: default;
+    }
+
+    .restore-btn {
+      color: var(--text-muted);
+    }
+
+    .restore-btn:hover {
+      border-color: var(--success);
+      color: var(--success);
+    }
+
+    .restore-btn svg {
+      opacity: 1 !important;
+      stroke: currentColor;
+    }
+
     .comment-drawer {
       padding: 0 14px 12px 48px;
       display: none;
@@ -1308,6 +1332,7 @@
       completed: false,
       hasIssue: false,
       comment: "",
+      removed: false,
       fileId: null,
       fileName: null,
     }));
@@ -1384,8 +1409,8 @@
       li.className = `driver-item ${d.id === state.selectedDriverId ? "active" : ""}`;
       li.addEventListener("click", () => selectDriver(d.id));
 
-      const remaining = d.items.filter((i) => !i.completed).length;
-      const hasIssues = d.items.some((i) => i.hasIssue);
+      const remaining = d.items.filter((i) => !i.completed && !i.removed).length;
+      const hasIssues = d.items.some((i) => i.hasIssue && !i.removed);
       const truckLabel = [d.truck ? `Trk: ${d.truck}` : "", d.trailer ? `Trl: ${d.trailer}` : ""]
         .filter(Boolean)
         .join(" • ");
@@ -1422,9 +1447,10 @@
 
     document.getElementById("mobileTitle").textContent = driver.name;
 
-    const pending = driver.items.filter((i) => !i.completed);
-    const completed = driver.items.filter((i) => i.completed);
-    const issueCount = driver.items.filter((i) => i.hasIssue).length;
+    const pending = driver.items.filter((i) => !i.completed && !i.removed);
+    const completed = driver.items.filter((i) => i.completed && !i.removed);
+    const removed = driver.items.filter((i) => i.removed);
+    const issueCount = driver.items.filter((i) => i.hasIssue && !i.removed).length;
 
     wrapper.innerHTML = `
       <header>
@@ -1468,12 +1494,12 @@
       </div>
     `;
 
-    renderChecklist(driver, pending, completed);
+    renderChecklist(driver, pending, completed, removed);
     bindMainEvents(driver);
     updateSyncButtonsState();
   }
 
-  function renderChecklist(driver, pending, completed) {
+  function renderChecklist(driver, pending, completed, removed) {
     const listEl = document.getElementById("unifiedChecklist");
     listEl.innerHTML = "";
 
@@ -1491,9 +1517,20 @@
       listEl.appendChild(divider);
       completed.forEach((item) => listEl.appendChild(buildItemEl(item)));
     }
+
+    if (removed.length > 0) {
+      const divider = document.createElement("li");
+      divider.className = "divider-row";
+      divider.textContent = `Removed (${removed.length})`;
+      divider.title = "No longer required, but kept visible instead of deleted. Everyone syncing this driver sees the same removed list.";
+      listEl.appendChild(divider);
+      removed.forEach((item) => listEl.appendChild(buildItemEl(item)));
+    }
   }
 
   function buildItemEl(item) {
+    if (item.removed) return buildRemovedItemEl(item);
+
     const li = document.createElement("li");
     li.className = `checklist-item ${item.completed ? "completed" : ""} ${item.hasIssue ? "has-issue" : ""}`;
 
@@ -1532,7 +1569,7 @@
           ${fileActionHtml}
         </div>
 
-        <button class="delete-btn" type="button" data-action="delete-item" title="Delete item" aria-label="Delete item">&times;</button>
+        <button class="delete-btn" type="button" data-action="delete-item" title="Remove from requirements" aria-label="Remove from requirements">&times;</button>
       </div>
 
       <div class="comment-drawer">
@@ -1544,7 +1581,7 @@
 
     li.querySelector('[data-action="toggle-complete"]').addEventListener("click", () => toggleItem(itemId));
     li.querySelector('[data-action="toggle-issue"]').addEventListener("click", () => toggleIssue(itemId));
-    li.querySelector('[data-action="delete-item"]').addEventListener("click", () => deleteItem(itemId));
+    li.querySelector('[data-action="delete-item"]').addEventListener("click", () => toggleRemoved(itemId));
 
     const contentEl = li.querySelector('[data-action="edit-text"]');
     contentEl.addEventListener("blur", () => updateItemText(itemId, contentEl.innerText));
@@ -1568,6 +1605,53 @@
     const uploadInput = li.querySelector('[data-action="upload-file"]');
     if (uploadInput) {
       uploadInput.addEventListener("change", () => uploadFile(itemId, uploadInput));
+    }
+
+    return li;
+  }
+
+  // Removed items stay in the list (struck through) instead of vanishing, and
+  // that "removed" flag rides along in every sync — so a teammate's device
+  // sees the same requirement crossed out instead of it just disappearing
+  // with no trace on their end.
+  function buildRemovedItemEl(item) {
+    const li = document.createElement("li");
+    li.className = "checklist-item removed";
+
+    const fileBadgeHtml = item.fileId
+      ? `
+        <span class="doc-badge" data-action="view-file" data-file-id="${item.fileId}" data-title="${escapeHtmlAttr(item.text)}">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+          <span class="label">View</span>
+        </span>
+      `
+      : "";
+
+    li.innerHTML = `
+      <div class="checklist-row-main">
+        <div class="btn-group-toggle">
+          <button class="checkbox-btn restore-btn" type="button" data-action="restore-item" title="Restore requirement" aria-label="Restore requirement">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
+          </button>
+        </div>
+
+        <div class="item-content">${escapeHtml(item.text)}</div>
+
+        <div class="file-actions">
+          ${fileBadgeHtml}
+        </div>
+
+        <button class="delete-btn" type="button" data-action="delete-item-permanent" title="Delete permanently" aria-label="Delete permanently">&times;</button>
+      </div>
+    `;
+
+    const itemId = item.id;
+    li.querySelector('[data-action="restore-item"]').addEventListener("click", () => toggleRemoved(itemId));
+    li.querySelector('[data-action="delete-item-permanent"]').addEventListener("click", () => deleteItemPermanently(itemId));
+
+    const viewBadge = li.querySelector('[data-action="view-file"]');
+    if (viewBadge) {
+      viewBadge.addEventListener("click", () => viewDocument(viewBadge.dataset.fileId, viewBadge.dataset.title));
     }
 
     return li;
@@ -1622,7 +1706,7 @@
       dbSaveState();
       renderSidebar();
     } else if (clean.length === 0) {
-      deleteItem(id);
+      toggleRemoved(id);
     }
   }
 
@@ -1633,11 +1717,30 @@
     }
   }
 
-  function deleteItem(id) {
+  // Soft-delete: the item stays in the list (struck through, under a
+  // "Removed" divider) and the "removed" flag syncs like any other status,
+  // so it shows as removed everywhere instead of just vanishing on this one
+  // device. Restoring is the same toggle in reverse.
+  function toggleRemoved(id) {
     const driver = currentDriver();
     if (!driver) return;
     const item = driver.items.find((i) => i.id === id);
-    if (item && item.fileId) dbDeleteFile(item.fileId);
+    if (!item) return;
+    item.removed = !item.removed;
+    dbSaveState();
+    render();
+    showToast(item.removed ? `Marked "${item.text}" as removed` : `Restored "${item.text}"`);
+  }
+
+  function deleteItemPermanently(id) {
+    const driver = currentDriver();
+    if (!driver) return;
+    const item = driver.items.find((i) => i.id === id);
+    if (!item) return;
+    if (!confirm(`Permanently delete "${item.text}"? This cannot be undone, and won't be pulled back even if a teammate's device still has it.`)) {
+      return;
+    }
+    if (item.fileId) dbDeleteFile(item.fileId);
     driver.items = driver.items.filter((i) => i.id !== id);
     dbSaveState();
     render();
@@ -1817,6 +1920,7 @@
         completed: Boolean(it.completed),
         hasIssue: Boolean(it.hasIssue),
         comment: it.completed ? "" : it.comment || "",
+        removed: Boolean(it.removed),
       })),
     };
   }
@@ -1883,6 +1987,7 @@
             completed: Boolean(it.completed),
             hasIssue: Boolean(it.hasIssue),
             comment: it.comment || "",
+            removed: Boolean(it.removed),
             fileId: null,
             fileName: null,
           })),
@@ -1899,10 +2004,12 @@
           const changed =
             localItem.completed !== Boolean(rit.completed) ||
             localItem.hasIssue !== Boolean(rit.hasIssue) ||
+            Boolean(localItem.removed) !== Boolean(rit.removed) ||
             (localItem.comment || "") !== (rit.comment || "");
           localItem.completed = Boolean(rit.completed);
           localItem.hasIssue = Boolean(rit.hasIssue);
           localItem.comment = rit.comment || "";
+          localItem.removed = Boolean(rit.removed);
           if (changed) updatedItems++;
         } else {
           existing.items.push({
@@ -1911,6 +2018,7 @@
             completed: Boolean(rit.completed),
             hasIssue: Boolean(rit.hasIssue),
             comment: rit.comment || "",
+            removed: Boolean(rit.removed),
             fileId: null,
             fileName: null,
           });
@@ -2094,6 +2202,7 @@
           completed: Boolean(item.completed),
           hasIssue: Boolean(item.hasIssue),
           comment: item.comment || "",
+          removed: Boolean(item.removed),
           fileId: null,
           fileName: null,
         };
@@ -2220,6 +2329,7 @@
         completed: false,
         hasIssue: false,
         comment: "",
+        removed: false,
         fileId: null,
         fileName: null,
       });

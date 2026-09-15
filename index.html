@@ -1929,7 +1929,7 @@
     // this device (or a teammate's) would just push/pull it right back.
     if (settings.scriptUrl) {
       try {
-        await sendViaForm({ action: "deleteDriver", driverName: target.name });
+        await sendViaForm({ action: "deleteDriver", id: target.id, driverName: target.name });
       } catch (err) {
         // Best-effort: still delete locally even if the sheet couldn't be reached.
       }
@@ -1984,6 +1984,7 @@
 
   function formatDriverPayload(driver) {
     return {
+      id: driver.id,
       driverName: driver.name,
       truck: driver.truck || "",
       trailer: driver.trailer || "",
@@ -2079,6 +2080,15 @@
     });
   }
 
+  function findLocalDriverForRemote_(rd) {
+    if (rd.id) {
+      const byId = state.drivers.find((d) => d.id === rd.id);
+      if (byId) return byId;
+    }
+    const name = (rd.driverName || "").trim().toLowerCase();
+    return state.drivers.find((d) => d.name.trim().toLowerCase() === name);
+  }
+
   function mergeRemoteDrivers(remoteDrivers) {
     let addedDrivers = 0;
     let addedItems = 0;
@@ -2089,11 +2099,11 @@
       if (!name) return;
 
       const remoteItems = Array.isArray(rd.items) ? rd.items : [];
-      const existing = state.drivers.find((d) => d.name.trim().toLowerCase() === name.toLowerCase());
+      const existing = findLocalDriverForRemote_(rd);
 
       if (!existing) {
         state.drivers.push({
-          id: "d_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
+          id: rd.id || "d_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
           name,
           truck: rd.truck || "",
           trailer: rd.trailer || "",
@@ -2111,6 +2121,10 @@
         addedDrivers++;
         return;
       }
+
+      existing.name = name;
+      existing.truck = rd.truck || "";
+      existing.trailer = rd.trailer || "";
 
       remoteItems.forEach((rit) => {
         const text = (rit.text || "").trim();
@@ -2146,19 +2160,57 @@
     return { addedDrivers, addedItems, updatedItems };
   }
 
+  // Removes local drivers that aren't present at all in a full (unfiltered)
+  // remote list — this is what makes deleting a driver's tab directly in
+  // the Sheet (by hand, not through the app) actually stick locally too.
+  // Only ever called from the unfiltered "Sync All" pull: a scoped
+  // single-driver pull only ever fetches that one driver, so "missing from
+  // this result" would say nothing about every other local driver.
+  function removeDriversMissingFromRemote_(remoteDrivers) {
+    const remoteIds = new Set(remoteDrivers.map((rd) => rd.id).filter(Boolean));
+    const remoteNames = new Set(remoteDrivers.map((rd) => (rd.driverName || "").trim().toLowerCase()).filter(Boolean));
+
+    const toRemove = state.drivers.filter((d) => {
+      const matchedById = d.id && remoteIds.has(d.id);
+      const matchedByName = remoteNames.has(d.name.trim().toLowerCase());
+      return !matchedById && !matchedByName;
+    });
+
+    toRemove.forEach((d) => {
+      d.items.forEach((it) => {
+        if (it.fileId) dbDeleteFile(it.fileId);
+      });
+    });
+
+    if (toRemove.length > 0) {
+      const removedIds = new Set(toRemove.map((d) => d.id));
+      state.drivers = state.drivers.filter((d) => !removedIds.has(d.id));
+      if (state.selectedDriverId && removedIds.has(state.selectedDriverId)) {
+        state.selectedDriverId = state.drivers.length > 0 ? state.drivers[0].id : null;
+      }
+    }
+
+    return toRemove.length;
+  }
+
   // With `onlyDriverName`, only that one driver's row is merged in — this is
   // what "Sync to Sheet" uses, so pushing/pulling a single driver doesn't
   // also reach out and pull in every other driver the team has synced.
   // "Sync All" calls this with no filter, so it (and only it) picks up
-  // brand-new drivers and every other driver's updates.
+  // brand-new drivers, every other driver's updates, AND removes drivers
+  // that no longer exist in the sheet at all (deleted by hand or otherwise).
   async function pullFromSheet({ onlyDriverName } = {}) {
     let remoteDrivers = await fetchSheetDrivers();
+    let removedDrivers = 0;
     if (onlyDriverName) {
       const target = onlyDriverName.trim().toLowerCase();
       remoteDrivers = remoteDrivers.filter((rd) => (rd.driverName || "").trim().toLowerCase() === target);
+    } else {
+      removedDrivers = removeDriversMissingFromRemote_(remoteDrivers);
     }
     const summary = mergeRemoteDrivers(remoteDrivers);
-    if (summary.addedDrivers || summary.addedItems || summary.updatedItems) {
+    summary.removedDrivers = removedDrivers;
+    if (summary.addedDrivers || summary.addedItems || summary.updatedItems || summary.removedDrivers) {
       dbSaveState();
       render();
     }
@@ -2168,6 +2220,7 @@
   function describeSyncSummary(summary) {
     const parts = [];
     if (summary.addedDrivers) parts.push(`${summary.addedDrivers} new driver${summary.addedDrivers === 1 ? "" : "s"}`);
+    if (summary.removedDrivers) parts.push(`${summary.removedDrivers} driver${summary.removedDrivers === 1 ? "" : "s"} removed`);
     if (summary.updatedItems) parts.push(`${summary.updatedItems} item${summary.updatedItems === 1 ? "" : "s"} updated`);
     if (summary.addedItems) parts.push(`${summary.addedItems} item${summary.addedItems === 1 ? "" : "s"} added`);
     return parts.length ? "Pulled from sheet: " + parts.join(", ") : "Already up to date with the sheet";

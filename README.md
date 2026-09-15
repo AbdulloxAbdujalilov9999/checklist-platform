@@ -52,61 +52,104 @@ browsers/devices.
 ## Google Sheets sync (share this with your team)
 
 Since there's no server, a shared Google Sheet is what lets a team see the
-same driver list and checklist state across everyone's browser. Every sync
-is two-way:
+same driver list and checklist state across everyone's browser.
 
-1. **Push** — the driver(s) you're syncing are written to the shared sheet
-   (this always fully overwrites that driver's row with your current data —
-   the sheet ends up exactly matching what you just pushed for that driver).
-2. **Pull** — right after pushing, the app reads back *every* driver
-   currently in the sheet and merges them into your local list: drivers that
-   exist in the sheet but not on your device are added (so if the sheet has
-   10 drivers and you only have 3, syncing brings in the other 7), and for
-   drivers you already have, each item's completed/issue/comment status is
-   updated to match the sheet.
+**Every driver gets their own tab in the Sheet** — a real, readable table,
+not a hidden data blob:
 
-A pull never deletes anything locally — it only adds drivers/items or
-updates the status of ones that already match by name, so nothing you or a
-teammate has entered gets silently wiped. Do this after any change you want
-the team to see, and again whenever you want to catch up on theirs.
+```
+Truck:    TR-104
+Trailer:  53-V-201
+                                                     <- blank spacer row
+Item                    Completed  Has Issue  Comment                Removed
+Registration            [x]        [ ]                               [ ]
+Insurance               [ ]        [ ]                               [ ]
+Cab Card / IRP          [ ]        [x]         Waiting on renewal     [ ]
+...
+```
+
+The Completed / Has Issue / Removed columns are real checkboxes — you can
+open the Sheet and tick one by hand, and the app picks that up on its next
+pull, same as if it had been changed in the app itself. Two more tabs
+support this and can be ignored: **Index** (tracks which tab belongs to
+which driver, so renaming a driver renames its tab instead of creating a
+duplicate) and **DeletedDrivers** (tracks deleted drivers so they don't get
+resurrected by a stale device — see below).
+
+Every sync is two-way:
+
+1. **Push** — the driver(s) you're syncing get their tab created or fully
+   rewritten to match your current data.
+2. **Pull** — right after pushing, the app reads every driver tab listed in
+   the Index and merges them into your local list: drivers that exist in
+   the sheet but not on your device are added (so if the sheet has 10
+   drivers and you only have 3, syncing brings in the other 7), and for
+   drivers you already have, name/truck/trailer and each item's
+   completed/issue/comment/removed status is updated to match the sheet.
 
 - **Sync to Sheet** (next to the driver name, and in the header) pushes and
   pulls *only the driver you're currently viewing* — it won't pull in a
-  teammate's brand-new driver, just catch this one up.
+  teammate's brand-new driver, just catch this one up. It never removes any
+  local driver.
 - **Sync All** pushes every driver on your device, then pulls *everything*
-  the sheet has — this is the one that brings in new drivers the rest of
-  the team has added.
-
-Deleting a driver (via the pencil icon → Edit → Delete) also tells the
-sheet: it removes that driver's row and records the name as deleted, so a
-teammate's device that still has that driver locally won't just push it
-right back on their next sync. Deleting a checklist *item* is different —
-see the "Removed" behavior above; that one's a visible, reversible flag,
-not an actual delete, and it does sync normally as part of the driver's
-data either way.
+  the sheet has, including removing local drivers that no longer exist in
+  the sheet **at all** — see "Deleting drivers" below. This is the one that
+  brings in new drivers the rest of the team has added.
 
 Uploaded documents stay device-local (only checklist text/status syncs, not
 the files themselves) — the sheet is for shared checklist status, not
 document storage.
 
+### Deleting drivers
+
+Deleting via the app (pencil icon → Edit → Delete) removes that driver's
+tab from the sheet and tombstones them in DeletedDrivers, so a teammate's
+device that still has that driver locally won't just push it right back on
+their next sync.
+
+**You can also just delete a driver's tab directly in the Sheet** — right-click
+the tab → Delete. The app notices the Index points at a tab that's gone and
+treats it as deleted: the next **Sync All** from any device removes that
+driver locally too. You don't need to touch the Index or DeletedDrivers
+tabs yourself; both push and pull self-heal a dangling Index entry into a
+proper tombstone the moment they notice it.
+
+Because this now means "missing from the sheet" can delete a driver
+locally, it relies on the push that runs right before every Sync All's pull
+actually reaching the sheet — a driver you added but haven't synced even
+once yet is fine (Sync All pushes it first, in the same run, before
+pulling), but if your connection drops mid-sync you could see a driver
+disappear locally that wasn't really deleted. If that ever happens, restore
+it from a backup (see above) or just re-add it and sync again.
+
+Deleting a checklist *item* is different — see the "Removed" behavior
+higher up; that one's a visible, reversible flag on an item, not an actual
+delete, and it syncs normally as part of the driver's table either way.
+
+### Why JSONP instead of fetch()
+
 The pull step talks to Apps Script over JSONP (a `<script>` tag), not
 `fetch()` — a plain `fetch()` GET to an Apps Script web app frequently fails
 with a generic "Failed to fetch" because Apps Script's redirect doesn't
 reliably carry the CORS headers `fetch()` needs; a `<script>` load isn't
-subject to CORS at all, so it works regardless. **This means the sheet's
-Apps Script must be running the version of `Code.gs` in this repo** (it
-added `doGet` JSONP support) — if you deployed an earlier version, or your
-own script before this existed, redeploy it (**Deploy → Manage deployments →
-Edit → New version**, not a brand new deployment, so the URL stays the
-same) or "Sync to Sheet"/"Sync All" will push fine but the pull half will
-fail with a timeout error telling you to do exactly this.
+subject to CORS at all, so it works regardless.
 
-**This has changed again** to support deleting drivers (above) — `Code.gs`
-now also tracks deleted driver names in a second "DeletedDrivers" tab so a
-deletion sticks. If you deploy this update, redeploy the Apps Script the
-same way (**Deploy → Manage deployments → Edit → New version**) or driver
-deletion will remove the driver locally but leave their row in the sheet,
-where it'll get pushed right back on the next sync.
+**This means the sheet's Apps Script must be running the `Code.gs` in this
+repo** — if you deployed an earlier version (or your own script from before
+any of this existed), redeploy it: **Deploy → Manage deployments → Edit →
+New version** (not a brand new deployment, so the URL stays the same), or
+"Sync to Sheet"/"Sync All" will push fine but the pull half will fail with
+an error telling you to do exactly this.
+
+**The per-driver-tab schema above is a breaking change from earlier
+versions of `Code.gs`**, which stored everything in one flat "Drivers" list
+(with a hidden JSON blob per row) instead of one tab per driver. If your
+sheet still has that old flat "Drivers" / "DeletedDrivers" layout, redeploy
+with the current `Code.gs` the same way, then delete the old "Drivers" tab
+by hand once you've confirmed the new per-driver tabs have the data you
+expect (nothing on the *app* side depends on the old sheet layout — every
+device's own local data is unaffected, and a Sync All from each device
+repopulates the new tabs from scratch).
 
 ### Using a different sheet
 

@@ -1114,12 +1114,12 @@
           placeholder="https://script.google.com/macros/s/.../exec"
         />
         <p class="hint">
-          Paste the URL of your own deployed Google Apps Script web app (see the README for the script
-          to deploy) and everyone on your team who enters the same URL shares the same driver list.
-          Sync buttons push your current driver(s) to the sheet, then pull back anything your
-          teammates have synced — new drivers appear automatically, and item statuses catch up to the
-          shared sheet. Nothing is sent anywhere until you set this; leave blank to keep this device
-          fully local.
+          Pre-filled with the team's shared sheet, so sync works out of the box for everyone — no
+          setup needed. Sync buttons push your current driver(s) to the sheet, then pull back anything
+          your teammates have synced — new drivers appear automatically, and item statuses catch up to
+          the shared sheet. To point at a different sheet, paste your own deployed Google Apps Script
+          web app URL (see the README) and Save; clear the field to keep this device fully local
+          instead.
         </p>
         <div class="settings-row" style="margin-top:10px;">
           <button class="settings-btn primary" id="btnSaveScriptUrl">Save</button>
@@ -1177,13 +1177,18 @@
   const STORE_STATE = "app_state";
   const STORE_FILES = "doc_files";
   const STORE_SETTINGS = "settings";
+  // Pre-filled so every teammate syncs to the same shared sheet out of the
+  // box. Still editable (or clearable) from Settings if you ever need a
+  // different sheet.
+  const DEFAULT_SCRIPT_URL =
+    "https://script.google.com/macros/s/AKfycbwHUzPtm4TNLSA5ztv24xlN--5qWjCBAj5UtQdcT5PxoxVyjfv3ajA9y7pqX5UBKWri/exec";
   let db = null;
 
   let state = {
     selectedDriverId: null,
     drivers: [],
   };
-  let settings = { scriptUrl: "" };
+  let settings = { scriptUrl: DEFAULT_SCRIPT_URL };
   let driverSearch = "";
 
   // ---------------------------------------------------------------------

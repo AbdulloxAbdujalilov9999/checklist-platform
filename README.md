@@ -6,9 +6,12 @@ flagging issues with notes, and attaching scanned documents/photos.
 
 Everything runs in the browser — there is no backend or account system.
 Data (drivers, checklist items, comments, and uploaded documents) is stored
-locally per-browser using IndexedDB. To use it with a team, set up
-[Google Sheets sync](#google-sheets-sync-share-this-with-your-team) below —
-the shared sheet is what keeps everyone's copy of the checklist in sync.
+locally per-browser using IndexedDB.
+
+The app ships pre-configured to sync with the team's shared Google Sheet (see
+[Google Sheets sync](#google-sheets-sync-share-this-with-your-team) below), so
+syncing works for everyone out of the box — no setup needed unless you want
+to point it at a different sheet.
 
 ## Using it
 
@@ -63,9 +66,13 @@ Uploaded documents stay device-local (only checklist text/status syncs, not
 the files themselves) — the sheet is for shared checklist status, not
 document storage.
 
-### Setting it up
+### Using a different sheet
 
-1. Create a Google Sheet for your team (or use an existing one).
+The **⚙ Settings** panel comes pre-filled with the team's shared Apps Script
+URL, so most people never need to touch this. To point the app at a
+*different* sheet instead (e.g. a separate team, or your own test sheet):
+
+1. Create a Google Sheet (or use an existing one).
 2. In it, open **Extensions → Apps Script**.
 3. Delete the placeholder code and paste in the contents of
    [`apps-script/Code.gs`](apps-script/Code.gs) from this repo.
@@ -74,13 +81,12 @@ document storage.
    [your org]" if you're on Google Workspace and want it restricted to your
    organization), then **Deploy**.
 5. Copy the resulting web app URL (ends in `/exec`).
-6. In the checklist app, open **⚙ Settings**, paste that URL under
-   "Google Sheets sync", and **Save**.
-7. Share the same URL with your teammates — they paste it into their own
-   **⚙ Settings** the same way. Everyone syncing against the same URL is now
-   working off the same shared sheet.
+6. In the checklist app, open **⚙ Settings**, replace the URL under
+   "Google Sheets sync" with your new one, and **Save**.
+7. Share that URL with whoever should sync against this new sheet — they
+   paste it into their own **⚙ Settings** the same way.
 
-Leave the URL blank to keep a device fully local with no sync.
+Clear the field (and Save) to keep a device fully local with no sync at all.
 
 When you edit `Code.gs` after deployment, use **Deploy → Manage deployments
 → Edit (pencil) → New version** so the same `/exec` URL picks up the change,

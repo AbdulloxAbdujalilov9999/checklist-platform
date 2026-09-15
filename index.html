@@ -948,6 +948,51 @@
       color: var(--danger);
     }
 
+    .docs-empty {
+      color: var(--text-muted);
+      font-size: 13px;
+      text-align: center;
+      padding: 24px 8px;
+    }
+
+    .docs-driver-group + .docs-driver-group {
+      margin-top: 18px;
+    }
+
+    .docs-driver-name {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 6px;
+    }
+
+    .docs-item-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 0;
+      border-top: 1px solid var(--border);
+    }
+
+    .docs-item-row:first-of-type {
+      border-top: none;
+    }
+
+    .docs-item-name {
+      flex: 1;
+      min-width: 0;
+      font-size: 13px;
+      color: var(--text-muted);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .docs-file-name {
+      color: var(--text);
+      font-weight: 500;
+    }
+
     .toast {
       position: fixed;
       bottom: 20px;
@@ -1174,6 +1219,13 @@
         </div>
       </div>
       <div class="settings-section">
+        <h4>Documents</h4>
+        <p class="hint">Every document uploaded across every driver, in one place.</p>
+        <div class="settings-row" style="margin-top:10px;">
+          <button class="settings-btn" id="btnViewAllDocs">📄 View all documents</button>
+        </div>
+      </div>
+      <div class="settings-section">
         <h4>Backup & restore</h4>
         <p class="hint">All data lives only in this browser. Export a backup regularly, especially before clearing browser data.</p>
         <div class="settings-row" style="margin-top:10px;">
@@ -1182,6 +1234,17 @@
         </div>
       </div>
     </div>
+  </div>
+</div>
+
+<!-- All Documents Modal (every attached file, grouped by driver) -->
+<div class="modal-overlay" id="allDocsModal">
+  <div class="modal-box modal-narrow" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <h3>All documents</h3>
+      <button class="modal-close" id="btnCloseAllDocsModal" aria-label="Close">&times;</button>
+    </div>
+    <div class="settings-body" id="allDocsBody"></div>
   </div>
 </div>
 
@@ -1594,25 +1657,28 @@
     const li = document.createElement("li");
     li.className = `checklist-item ${item.completed ? "completed" : ""} ${item.hasIssue ? "has-issue" : ""}`;
 
-    let fileActionHtml = "";
-    if (item.fileId) {
-      fileActionHtml = `
+    // One upload control at all times, whether or not a document is already
+    // attached — picking a file always replaces whatever was there (see
+    // uploadFile), so there's no separate "remove, then re-upload" dance.
+    let fileActionHtml = `
+      ${
+        item.fileId
+          ? `
         <span class="doc-badge" data-action="view-file" data-file-id="${item.fileId}" data-title="${escapeHtmlAttr(item.text)}">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
           <span class="label">View</span>
         </span>
         <button class="remove-doc-btn" type="button" data-action="remove-file" title="Remove file" aria-label="Remove file">&times;</button>
-      `;
-    } else {
-      fileActionHtml = `
-        <label class="upload-btn-label" title="Upload document">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path>
-          </svg>
-          <input type="file" class="hidden-file-input" accept=".pdf,image/*" data-action="upload-file" />
-        </label>
-      `;
-    }
+      `
+          : ""
+      }
+      <label class="upload-btn-label" title="${item.fileId ? "Replace document" : "Upload document"}">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path>
+        </svg>
+        <input type="file" class="hidden-file-input" accept=".pdf,image/*" data-action="upload-file" />
+      </label>
+    `;
 
     li.innerHTML = `
       <div class="checklist-row-main">
@@ -1854,6 +1920,11 @@
       return;
     }
 
+    // Replacing an existing document: delete the old blob instead of just
+    // overwriting the reference, so it doesn't sit around as dead storage.
+    const previousFileId = item.fileId;
+    if (previousFileId) dbDeleteFile(previousFileId);
+
     item.fileId = fileId;
     item.fileName = file.name;
     item.completed = true;
@@ -1862,11 +1933,19 @@
 
     dbSaveState();
     render();
-    showToast("Document uploaded");
+    showToast(previousFileId ? "Document replaced" : "Document uploaded");
   }
 
   async function removeAttachedFile(itemId) {
     const driver = currentDriver();
+    if (!driver) return;
+    await removeAttachedFileFor(driver.id, itemId);
+  }
+
+  // Same as removeAttachedFile, but for any driver — used by the All
+  // Documents overview, which isn't scoped to whichever driver is selected.
+  async function removeAttachedFileFor(driverId, itemId) {
+    const driver = state.drivers.find((d) => d.id === driverId);
     if (!driver) return;
     const item = driver.items.find((i) => i.id === itemId);
     if (item && item.fileId) {
@@ -2514,6 +2593,70 @@
   }
 
   // ---------------------------------------------------------------------
+  // All Documents modal
+  // ---------------------------------------------------------------------
+
+  function renderAllDocsModal() {
+    const body = document.getElementById("allDocsBody");
+    const driversWithDocs = state.drivers
+      .map((d) => ({ driver: d, items: d.items.filter((i) => i.fileId) }))
+      .filter((g) => g.items.length > 0);
+
+    if (driversWithDocs.length === 0) {
+      body.innerHTML = '<p class="docs-empty">No documents uploaded yet.</p>';
+      return;
+    }
+
+    body.innerHTML = driversWithDocs
+      .map(
+        (g) => `
+        <div class="docs-driver-group">
+          <div class="docs-driver-name">${escapeHtml(g.driver.name)}</div>
+          ${g.items
+            .map(
+              (item) => `
+            <div class="docs-item-row">
+              <span class="docs-item-name">${escapeHtml(item.text)} — <span class="docs-file-name">${escapeHtml(item.fileName || "document")}</span></span>
+              <span class="doc-badge" data-action="view" data-driver-id="${g.driver.id}" data-item-id="${item.id}">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                <span class="label">View</span>
+              </span>
+              <button class="remove-doc-btn" type="button" data-action="remove" data-driver-id="${g.driver.id}" data-item-id="${item.id}" title="Remove file" aria-label="Remove file">&times;</button>
+            </div>
+          `
+            )
+            .join("")}
+        </div>
+      `
+      )
+      .join("");
+
+    body.querySelectorAll('[data-action="view"]').forEach((el) => {
+      el.addEventListener("click", () => {
+        const driver = state.drivers.find((d) => d.id === el.dataset.driverId);
+        const item = driver && driver.items.find((i) => i.id === el.dataset.itemId);
+        if (item) viewDocument(item.fileId, item.text);
+      });
+    });
+
+    body.querySelectorAll('[data-action="remove"]').forEach((el) => {
+      el.addEventListener("click", async () => {
+        await removeAttachedFileFor(el.dataset.driverId, el.dataset.itemId);
+        renderAllDocsModal();
+      });
+    });
+  }
+
+  function openAllDocsModal() {
+    renderAllDocsModal();
+    document.getElementById("allDocsModal").style.display = "flex";
+  }
+
+  function closeAllDocsModal() {
+    document.getElementById("allDocsModal").style.display = "none";
+  }
+
+  // ---------------------------------------------------------------------
   // Sidebar drawer (mobile)
   // ---------------------------------------------------------------------
 
@@ -2620,6 +2763,10 @@
     document.getElementById("btnSaveScriptUrl").addEventListener("click", saveScriptUrl);
     document.getElementById("btnClearScriptUrl").addEventListener("click", clearScriptUrl);
 
+    document.getElementById("btnViewAllDocs").addEventListener("click", openAllDocsModal);
+    document.getElementById("btnCloseAllDocsModal").addEventListener("click", closeAllDocsModal);
+    document.getElementById("allDocsModal").addEventListener("click", closeAllDocsModal);
+
     document.getElementById("btnCloseEditDriverModal").addEventListener("click", closeEditDriverModal);
     document.getElementById("editDriverModal").addEventListener("click", closeEditDriverModal);
     document.getElementById("btnSaveEditDriver").addEventListener("click", saveEditDriverName);
@@ -2644,6 +2791,7 @@
       if (e.key === "Escape") {
         closeDocModal();
         closeSettingsModal();
+        closeAllDocsModal();
         closeEditDriverModal();
         closeSidebarDrawer();
       }

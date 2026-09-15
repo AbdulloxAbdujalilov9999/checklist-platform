@@ -24,7 +24,14 @@ folder with any static file host / GitHub Pages.
 - Tap the circle to mark an item complete, or the `!` to flag an issue and
   leave a comment.
 - Tap the paperclip to attach a PDF/photo to an item (this also marks it
-  complete); tap **View** to preview it, or the `×` to remove it.
+  complete). The paperclip stays there even after a file is attached —
+  tapping it again picks a new file and replaces the old one (which gets
+  deleted, not left behind) in one step, no need to remove first. Tap
+  **View** to preview the attached file, or the small `×` next to it to
+  clear it without replacing.
+- **⚙ Settings → View all documents** lists every file attached across
+  every driver in one place, with View/Remove for each — no need to open
+  each driver individually to find something.
 - The `×` on a checklist item doesn't delete it — it moves the item to a
   **Removed** section at the bottom, struck through, so the team can still
   see it used to be a requirement. Tap the ↺ restore icon there to bring it

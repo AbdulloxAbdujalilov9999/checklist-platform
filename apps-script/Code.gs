@@ -12,6 +12,13 @@
  *
  * doPost (called by "Sync to Sheet" / "Sync All"): upserts one driver's row.
  * doGet  (called when the app pulls team changes): returns every driver row.
+ *
+ * doGet responds JSONP-style (wrapping the JSON in a callback function call)
+ * when called with a `callback` query parameter, which is how the app calls
+ * it — a plain `<script src="...">` tag load isn't subject to CORS the way
+ * fetch() is, so this works from any browser regardless of how the web app
+ * deployment's CORS headers behave. A plain `?` GET with no callback still
+ * returns normal JSON, e.g. for testing the URL directly in a browser.
  */
 
 var SHEET_NAME = "Drivers";
@@ -46,12 +53,22 @@ function doPost(e) {
 }
 
 function doGet(e) {
+  var callback = e && e.parameter && e.parameter.callback;
+  var result;
   try {
     var drivers = readAllDrivers_(getSheet_());
-    return jsonResponse_({ ok: true, drivers: drivers });
+    result = { ok: true, drivers: drivers };
   } catch (err) {
-    return jsonResponse_({ ok: false, error: String(err) });
+    result = { ok: false, error: String(err) };
   }
+
+  if (callback) {
+    var safeCallback = String(callback).replace(/[^a-zA-Z0-9_$]/g, "");
+    return ContentService.createTextOutput(safeCallback + "(" + JSON.stringify(result) + ");").setMimeType(
+      ContentService.MimeType.JAVASCRIPT
+    );
+  }
+  return jsonResponse_(result);
 }
 
 function upsertDriver_(sheet, payload) {

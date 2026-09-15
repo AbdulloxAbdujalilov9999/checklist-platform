@@ -73,6 +73,18 @@ Uploaded documents stay device-local (only checklist text/status syncs, not
 the files themselves) — the sheet is for shared checklist status, not
 document storage.
 
+The pull step talks to Apps Script over JSONP (a `<script>` tag), not
+`fetch()` — a plain `fetch()` GET to an Apps Script web app frequently fails
+with a generic "Failed to fetch" because Apps Script's redirect doesn't
+reliably carry the CORS headers `fetch()` needs; a `<script>` load isn't
+subject to CORS at all, so it works regardless. **This means the sheet's
+Apps Script must be running the version of `Code.gs` in this repo** (it
+added `doGet` JSONP support) — if you deployed an earlier version, or your
+own script before this existed, redeploy it (**Deploy → Manage deployments →
+Edit → New version**, not a brand new deployment, so the URL stays the
+same) or "Sync to Sheet"/"Sync All" will push fine but the pull half will
+fail with a timeout error telling you to do exactly this.
+
 ### Using a different sheet
 
 The **⚙ Settings** panel comes pre-filled with the team's shared Apps Script

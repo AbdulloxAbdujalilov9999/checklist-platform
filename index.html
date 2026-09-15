@@ -1955,12 +1955,56 @@
   // their completed/issue/comment status updated to match the sheet. Local
   // items and drivers with no counterpart in the sheet are left untouched —
   // a pull never deletes anything, it only adds or catches up.
-  async function fetchSheetDrivers() {
-    const res = await fetch(settings.scriptUrl, { method: "GET" });
-    if (!res.ok) throw new Error("Sheet responded with " + res.status);
-    const data = await res.json();
-    if (!data || data.ok === false) throw new Error((data && data.error) || "Unknown error reading sheet");
-    return Array.isArray(data.drivers) ? data.drivers : [];
+  //
+  // This uses JSONP (a <script> tag) instead of fetch(). A plain fetch() GET
+  // to an Apps Script web app frequently fails with a generic "Failed to
+  // fetch" — Apps Script's redirect to script.googleusercontent.com doesn't
+  // reliably carry CORS headers fetch requires to let JS read the response.
+  // A <script> tag load isn't subject to CORS at all (same reason the push
+  // side uses a hidden form + iframe instead of fetch), so this is the
+  // reliable way to read data back cross-origin from Apps Script.
+  let jsonpCounter = 0;
+  function fetchSheetDrivers() {
+    return new Promise((resolve, reject) => {
+      const callbackName = "__checklistSyncCallback_" + Date.now() + "_" + jsonpCounter++;
+      const script = document.createElement("script");
+      let settled = false;
+
+      const cleanup = () => {
+        delete window[callbackName];
+        script.remove();
+        clearTimeout(timer);
+      };
+
+      const timer = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        reject(new Error("Timed out reaching the shared sheet (15s). Check the sync URL in Settings and that it's deployed with the latest apps-script/Code.gs."));
+      }, 15000);
+
+      window[callbackName] = (data) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        if (!data || data.ok === false) {
+          reject(new Error((data && data.error) || "Unknown error reading sheet"));
+          return;
+        }
+        resolve(Array.isArray(data.drivers) ? data.drivers : []);
+      };
+
+      script.onerror = () => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        reject(new Error("Could not reach the sync URL. Double-check it in Settings, and make sure it's deployed with the latest apps-script/Code.gs (redeploy → new version)."));
+      };
+
+      const separator = settings.scriptUrl.includes("?") ? "&" : "?";
+      script.src = settings.scriptUrl + separator + "callback=" + callbackName;
+      document.body.appendChild(script);
+    });
   }
 
   function mergeRemoteDrivers(remoteDrivers) {
@@ -2064,18 +2108,26 @@
 
     try {
       await sendViaForm(formatDriverPayload(driver));
-      syncBtn.innerHTML = "⏳ Pulling team changes...";
+    } catch (err) {
+      showToast("Could not push to the sheet: " + err.message);
+      syncBtn.innerHTML = originalText;
+      syncBtn.disabled = false;
+      return;
+    }
+
+    syncBtn.innerHTML = "⏳ Pulling team changes...";
+    try {
       const summary = await pullFromSheet();
       syncBtn.innerHTML = `✅ Saved ${escapeHtml(driver.name)}!`;
       showToast(describeSyncSummary(summary));
+    } catch (err) {
+      syncBtn.innerHTML = `✅ Saved ${escapeHtml(driver.name)}!`;
+      showToast(`Pushed OK, but couldn't pull team changes: ${err.message}`);
+    } finally {
       setTimeout(() => {
         syncBtn.innerHTML = originalText;
         syncBtn.disabled = false;
       }, 2500);
-    } catch (err) {
-      showToast("Sync failed: " + err.message);
-      syncBtn.innerHTML = originalText;
-      syncBtn.disabled = false;
     }
   }
 
@@ -2098,14 +2150,23 @@
         await sendViaForm(formatDriverPayload(d));
         await new Promise((r) => setTimeout(r, 700));
       }
+    } catch (err) {
+      showToast("Could not push to the sheet: " + err.message);
+      setTimeout(() => {
+        allBtn.innerHTML = originalText;
+        allBtn.disabled = false;
+      }, 2500);
+      return;
+    }
 
-      allBtn.innerHTML = "⏳ Pulling team changes...";
+    allBtn.innerHTML = "⏳ Pulling team changes...";
+    try {
       const summary = await pullFromSheet();
-
       allBtn.innerHTML = "✅ All drivers synced!";
       showToast(describeSyncSummary(summary));
     } catch (err) {
-      showToast("Sync failed: " + err.message);
+      allBtn.innerHTML = "✅ Pushed, pull failed";
+      showToast(`Pushed OK, but couldn't pull team changes: ${err.message}`);
     } finally {
       setTimeout(() => {
         allBtn.innerHTML = originalText;

@@ -81,8 +81,35 @@ function getIndexSheet_() {
     sheet.setFrozenRows(1);
   }
   migrateIndexSheet_(ss, sheet);
+  styleIndexSheet_(sheet);
   moveToEnd_(ss, sheet);
   return sheet;
+}
+
+// Cosmetic only — cheap to re-run on every call, and keeps a manually
+// tweaked Index looking consistent again after the next sync.
+function styleIndexSheet_(sheet) {
+  var headerRange = sheet.getRange(1, 1, 1, INDEX_HEADER_ROW.length);
+  headerRange
+    .setFontWeight("bold")
+    .setFontColor("#ffffff")
+    .setBackground("#5f6368")
+    .setHorizontalAlignment("center")
+    .setVerticalAlignment("middle");
+  sheet.setFrozenRows(1);
+  sheet.setColumnWidth(1, 130);
+  sheet.setColumnWidth(2, 170);
+  sheet.setColumnWidth(3, 170);
+  sheet.setColumnWidth(4, 100);
+  sheet.setColumnWidth(5, 100);
+  sheet.setColumnWidth(6, 170);
+  sheet.setColumnWidth(INDEX_COL_REMOVED, 90);
+  sheet.getRange(1, INDEX_COL_REMOVED, 1, 1).setHorizontalAlignment("center");
+  var lastRow = sheet.getLastRow();
+  if (lastRow > 1) {
+    sheet.getRange(2, INDEX_COL_REMOVED, lastRow - 1, 1).setHorizontalAlignment("center");
+  }
+  sheet.setTabColor("#9aa0a6");
 }
 
 // One-time, idempotent upgrade for a sheet still on an older schema:
@@ -251,25 +278,73 @@ function uniqueTabName_(ss, baseName, currentTabName) {
 // Driver tab read/write
 // ---------------------------------------------------------------------
 
+var BRAND_COLOR = "#2249d6";
+var ISSUE_COLOR = "#ff9f0a";
+var ISSUE_ROW_COLOR = "#fff3cd";
+var META_FILL = "#f6f8fb";
+var GRID_COLOR = "#e4e8f0";
+
 function writeDriverTable_(tab, name, truck, trailer, items) {
   tab.clear();
+  tab.clearConditionalFormatRules();
+
+  // Truck/Trailer meta card
   tab.getRange(1, 1, 1, 2).setValues([["Truck:", truck || ""]]);
   tab.getRange(2, 1, 1, 2).setValues([["Trailer:", trailer || ""]]);
-  tab.getRange(4, 1, 1, TABLE_HEADER_ROW.length).setValues([TABLE_HEADER_ROW]);
-  tab.getRange(4, 1, 1, TABLE_HEADER_ROW.length).setFontWeight("bold");
+  tab.getRange(1, 1, 2, 2).setBackground(META_FILL);
+  tab.getRange(1, 1, 2, 1).setFontWeight("bold").setFontColor(BRAND_COLOR);
+  tab
+    .getRange(1, 1, 2, 4)
+    .setBorder(false, false, true, false, false, false, GRID_COLOR, SpreadsheetApp.BorderStyle.SOLID);
+
+  // Table header
+  var headerRange = tab.getRange(4, 1, 1, TABLE_HEADER_ROW.length);
+  headerRange.setValues([TABLE_HEADER_ROW]);
+  headerRange
+    .setFontWeight("bold")
+    .setFontColor("#ffffff")
+    .setBackground(BRAND_COLOR)
+    .setHorizontalAlignment("center")
+    .setVerticalAlignment("middle");
+  tab.getRange(4, 1).setHorizontalAlignment("left");
+  tab.getRange(4, 4).setHorizontalAlignment("left");
 
   var rows = (items || []).map(function (it) {
     return [it.text || "", Boolean(it.completed), Boolean(it.hasIssue), it.comment || ""];
   });
 
   if (rows.length > 0) {
-    tab.getRange(ITEMS_START_ROW, 1, rows.length, 4).setValues(rows);
+    var dataRange = tab.getRange(ITEMS_START_ROW, 1, rows.length, 4);
+    dataRange.setValues(rows);
+    dataRange.setBorder(true, true, true, true, true, true, GRID_COLOR, SpreadsheetApp.BorderStyle.SOLID);
+    dataRange.applyRowBanding(SpreadsheetApp.BandingTheme.LIGHT_GREY, false, false);
+
     tab.getRange(ITEMS_START_ROW, 2, rows.length, 1).insertCheckboxes();
     tab.getRange(ITEMS_START_ROW, 3, rows.length, 1).insertCheckboxes();
+    tab.getRange(ITEMS_START_ROW, 2, rows.length, 2).setHorizontalAlignment("center");
+    tab.getRange(ITEMS_START_ROW, 4, rows.length, 1).setWrap(true);
+
+    // Highlight the whole row wherever "Has Issue" is checked.
+    var issueRule = SpreadsheetApp.newConditionalFormatRule()
+      .whenFormulaSatisfied("=$C" + ITEMS_START_ROW + "=TRUE")
+      .setBackground(ISSUE_ROW_COLOR)
+      .setRanges([dataRange])
+      .build();
+    tab.setConditionalFormatRules([issueRule]);
+
+    var hasOpenIssue = rows.some(function (r) {
+      return r[2] === true;
+    });
+    tab.setTabColor(hasOpenIssue ? ISSUE_COLOR : null);
+  } else {
+    tab.setTabColor(null);
   }
 
   tab.setColumnWidth(1, 260);
+  tab.setColumnWidth(2, 100);
+  tab.setColumnWidth(3, 100);
   tab.setColumnWidth(4, 260);
+  tab.setFrozenRows(4);
 }
 
 function readDriverTable_(tab) {

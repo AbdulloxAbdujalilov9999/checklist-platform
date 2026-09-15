@@ -74,6 +74,12 @@ same as if it had been changed in the app itself. A driver's checklist
 "Removed" status (see below) is local to the app and isn't a column here —
 it doesn't sync to the sheet at all.
 
+Each driver's tab is formatted, not just raw values: a colored header row,
+gridlines, alternating row shading, wrapped comment text, and any row with
+"Has Issue" checked gets highlighted amber automatically. A driver with any
+open issue also gets an orange sheet-tab color, so you can spot who needs
+attention just from the tab strip without opening anything.
+
 One more tab supports this and can be left alone: **Index**, kept as the
 last tab in the spreadsheet. It's one row per driver ever synced —
 tracking which sheet tab is theirs (so renaming a driver renames its tab

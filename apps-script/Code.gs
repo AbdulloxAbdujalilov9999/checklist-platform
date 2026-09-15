@@ -60,8 +60,16 @@ function getSpreadsheet_() {
 }
 
 function moveToEnd_(ss, sheet) {
+  var sheets = ss.getSheets();
+  var alreadyLast = sheets.length > 0 && sheets[sheets.length - 1].getSheetId() === sheet.getSheetId();
+  if (alreadyLast) return;
+
+  var previouslyActive = ss.getActiveSheet();
   ss.setActiveSheet(sheet);
   ss.moveActiveSheet(ss.getNumSheets());
+  if (previouslyActive && previouslyActive.getSheetId() !== sheet.getSheetId()) {
+    ss.setActiveSheet(previouslyActive);
+  }
 }
 
 function getIndexSheet_() {
@@ -71,9 +79,54 @@ function getIndexSheet_() {
     sheet = ss.insertSheet(INDEX_SHEET_NAME);
     sheet.appendRow(INDEX_HEADER_ROW);
     sheet.setFrozenRows(1);
-    moveToEnd_(ss, sheet);
   }
+  migrateIndexSheet_(ss, sheet);
+  moveToEnd_(ss, sheet);
   return sheet;
+}
+
+// One-time, idempotent upgrade for a sheet still on an older schema:
+//   - adds the "Removed" column if this Index predates it
+//   - folds in a separate "DeletedDrivers" tombstone tab if one still
+//     exists, marking those driver ids Removed here, then deletes it —
+//     after this runs once there's only ever the one Index tab.
+// Safe to call on every request: once migrated, both checks are no-ops.
+function migrateIndexSheet_(ss, indexSheet) {
+  var lastCol = indexSheet.getLastColumn();
+  var header = lastCol > 0 ? indexSheet.getRange(1, 1, 1, lastCol).getValues()[0] : [];
+
+  if (header.length < INDEX_COL_REMOVED || header[INDEX_COL_REMOVED - 1] !== "Removed") {
+    indexSheet.getRange(1, INDEX_COL_REMOVED).setValue("Removed");
+    var lastRow = indexSheet.getLastRow();
+    if (lastRow > 1) {
+      var removedRange = indexSheet.getRange(2, INDEX_COL_REMOVED, lastRow - 1, 1);
+      var existingFlags = removedRange.getValues();
+      removedRange.setValues(existingFlags.map(function (r) { return [Boolean(r[0])]; }));
+      removedRange.insertCheckboxes();
+    }
+  }
+
+  var deletedSheet = ss.getSheetByName("DeletedDrivers");
+  if (!deletedSheet) return;
+
+  var deletedData = deletedSheet.getDataRange().getValues();
+  for (var i = 1; i < deletedData.length; i++) {
+    var id = deletedData[i][0];
+    var name = deletedData[i][1];
+    var deletedAt = deletedData[i][2];
+    if (!id) continue;
+
+    var existing = findIndexRow_(indexSheet, id);
+    if (existing) {
+      if (!existing.removed) markIndexRowRemoved_(indexSheet, existing.rowIndex);
+    } else {
+      indexSheet.appendRow([id, "", name || "", "", "", deletedAt || new Date().toISOString(), true]);
+      var newRow = indexSheet.getLastRow();
+      indexSheet.getRange(newRow, INDEX_COL_REMOVED, 1, 1).insertCheckboxes();
+    }
+  }
+
+  ss.deleteSheet(deletedSheet);
 }
 
 function jsonResponse_(obj) {

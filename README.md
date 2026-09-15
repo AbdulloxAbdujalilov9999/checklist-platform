@@ -158,11 +158,12 @@ local data is unaffected, and a Sync All from each device repopulates the
 new tabs from scratch).
 
 If your sheet has an older *pair* of tracking tabs — a separate "Index" and
-"DeletedDrivers" — that's from a since-merged intermediate version: the
-current `Code.gs` keeps everything in one "Index" tab with a Removed
-column instead. Redeploy the same way and it'll create the merged tab
-fresh; delete the old "DeletedDrivers" tab by hand once you're happy with
-it (nothing reads it anymore).
+"DeletedDrivers" — that's from a since-merged intermediate version.
+Redeploy with the current `Code.gs` and the next sync migrates this
+automatically: it adds the Removed column to your existing Index if it's
+missing, folds every row from "DeletedDrivers" into Index (flagged
+Removed), deletes the now-empty "DeletedDrivers" tab, and pins Index as
+the last tab — no manual cleanup needed.
 
 ### Using a different sheet
 
